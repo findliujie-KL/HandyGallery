@@ -61,6 +61,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -140,6 +141,9 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
          */
         val pull = remember { Animatable(0f) }
         var sheetOpen by remember { mutableStateOf(false) }
+        /** Whether the photo on screen is zoomed in, and a counter bumped to ask it to zoom back out. */
+        var zoomed by remember { mutableStateOf(false) }
+        var unzoom by remember { mutableIntStateOf(0) }
 
         fun drag(delta: Float) {
             scope.launch { pull.snapTo((pull.value + delta).coerceIn(-sheetHeight, height)) }
@@ -174,7 +178,18 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
                 }
             }
         }
-        // Composed after the app-level handler, so while the sheet is up Back closes it instead of leaving.
+        /** Leaves the way a downward swipe does, so Back and the arrow get the same transition. */
+        fun leave() {
+            scope.launch {
+                pull.animateTo(height, tween(180))
+                vm.back()
+            }
+        }
+
+        // Back undoes one thing at a time; a handler composed later takes priority over an earlier one.
+        // So: close the details sheet, else zoom back out, else leave.
+        BackHandler(onBack = ::leave)
+        BackHandler(zoomed) { unzoom++ }
         BackHandler(sheetOpen, ::closeSheet)
 
         /** 0 at rest, 1 once the photo has been dragged far enough down to be clearly leaving. */
@@ -198,6 +213,9 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
             ) { page ->
                 ZoomableImage(
                     photos[page],
+                    active = page == pager.currentPage,
+                    unzoom = unzoom,
+                    onZoomed = { zoomed = it },
                     onTap = { if (sheetOpen) closeSheet() else chrome = !chrome },
                     onVerticalDrag = ::drag,
                     onVerticalDragEnd = ::settle,
@@ -209,7 +227,7 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
                     Modifier.align(Alignment.TopCenter).fillMaxWidth().background(Scrim).statusBarsPadding().padding(4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(onClick = vm::back) {
+                    IconButton(onClick = ::leave) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                     Box(Modifier.weight(1f))
@@ -350,9 +368,20 @@ private fun RowScope.BarAction(icon: ImageVector, label: String, onClick: () -> 
  * One photo: pinch or double-tap to zoom. At normal size a vertical drag is reported through
  * [onVerticalDrag] (pixels moved) and [onVerticalDragEnd], for the viewer to turn into the details
  * sheet or a dismissal. Sideways swipes are left to the pager.
+ *
+ * Only the [active] page reports its zoom through [onZoomed]; a change of [unzoom] asks it to zoom
+ * back out, and a page that stops being active resets itself.
  */
 @Composable
-private fun ZoomableImage(photo: Photo, onTap: () -> Unit, onVerticalDrag: (Float) -> Unit, onVerticalDragEnd: () -> Unit) {
+private fun ZoomableImage(
+    photo: Photo,
+    active: Boolean,
+    unzoom: Int,
+    onZoomed: (Boolean) -> Unit,
+    onTap: () -> Unit,
+    onVerticalDrag: (Float) -> Unit,
+    onVerticalDragEnd: () -> Unit,
+) {
     val context = LocalContext.current
     val key = photo.cacheKey
     val configuration = LocalConfiguration.current
@@ -386,6 +415,31 @@ private fun ZoomableImage(photo: Photo, onTap: () -> Unit, onVerticalDrag: (Floa
     val scope = rememberCoroutineScope()
     /** The double-tap zoom animation in flight, so a second double-tap or a pinch can take over from it. */
     var zooming by remember { mutableStateOf<Job?>(null) }
+
+    /** Eases to [toScale] and [toOffset]; shared by double-tap and Back. */
+    fun zoomTo(toScale: Float, toOffset: Offset) {
+        val fromScale = scale
+        val fromOffset = offset
+        zooming?.cancel()
+        zooming = scope.launch {
+            animate(0f, 1f, animationSpec = tween(240, easing = FastOutSlowInEasing)) { t, _ ->
+                scale = fromScale + (toScale - fromScale) * t
+                offset = fromOffset + (toOffset - fromOffset) * t
+            }
+        }
+    }
+
+    val reportZoomed by rememberUpdatedState(onZoomed)
+    val isZoomed = scale > 1f
+    LaunchedEffect(active, isZoomed) { if (active) reportZoomed(isZoomed) }
+    LaunchedEffect(unzoom) { if (unzoom > 0 && active && scale > 1f) zoomTo(1f, Offset.Zero) }
+    LaunchedEffect(active) {
+        if (!active) {
+            zooming?.cancel()
+            scale = 1f
+            offset = Offset.Zero
+        }
+    }
     val tap by rememberUpdatedState(onTap)
     val verticalDrag by rememberUpdatedState(onVerticalDrag)
     val verticalDragEnd by rememberUpdatedState(onVerticalDragEnd)
@@ -402,8 +456,9 @@ private fun ZoomableImage(photo: Photo, onTap: () -> Unit, onVerticalDrag: (Floa
                     do {
                         val event = awaitPointerEvent()
                         if (event.changes.size > 1 || scale > 1f) {
-                            // Zooming or zoomed: this handler owns the gesture.
-                            zooming?.cancel()
+                            // Zooming or zoomed: this handler owns the gesture. Only real movement interrupts a
+                            // double-tap animation; the tap's own release arrives here too and must not stop it.
+                            if (event.changes.size > 1 || event.changes.any { it.positionChanged() }) zooming?.cancel()
                             if (vertical == true) verticalDragEnd()
                             vertical = false
                             scale = (scale * event.calculateZoom()).coerceIn(1f, 8f)
@@ -432,22 +487,13 @@ private fun ZoomableImage(photo: Photo, onTap: () -> Unit, onVerticalDrag: (Floa
                 detectTapGestures(
                     onTap = { tap() },
                     onDoubleTap = { tapped ->
-                        val fromScale = scale
-                        val fromOffset = offset
-                        val toScale = if (fromScale > 1f) 1f else 2.5f
+                        val toScale = if (scale > 1f) 1f else 2.5f
                         // Zooming in keeps the tapped point under the finger, as far as the edges allow.
                         val centre = Offset(size.width / 2f, size.height / 2f)
                         val maxX = size.width * (toScale - 1) / 2
                         val maxY = size.height * (toScale - 1) / 2
                         val wanted = (centre - tapped) * (toScale - 1)
-                        val toOffset = Offset(wanted.x.coerceIn(-maxX, maxX), wanted.y.coerceIn(-maxY, maxY))
-                        zooming?.cancel()
-                        zooming = scope.launch {
-                            animate(0f, 1f, animationSpec = tween(240, easing = FastOutSlowInEasing)) { t, _ ->
-                                scale = fromScale + (toScale - fromScale) * t
-                                offset = fromOffset + (toOffset - fromOffset) * t
-                            }
-                        }
+                        zoomTo(toScale, Offset(wanted.x.coerceIn(-maxX, maxX), wanted.y.coerceIn(-maxY, maxY)))
                     },
                 )
             },

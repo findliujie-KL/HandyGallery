@@ -21,6 +21,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -31,6 +33,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -218,50 +221,54 @@ private fun App(vm: GalleryViewModel) {
     LaunchedEffect(Unit) { if (!vm.canRead) permissionLauncher.launch(Media.permissions) }
     BackHandler(vm.stack.size > 1, vm::back)
 
-    // The viewer is drawn over the screen it was opened from rather than replacing it. Swiping the
-    // photo away then reveals that screen directly, and the wall keeps its scroll position meanwhile.
-    val top = vm.stack.last()
-    val base = if (top is Screen.Viewer && vm.stack.size > 1) vm.stack[vm.stack.lastIndex - 1] else top
-    when (val screen = base) {
-        Screen.Home -> HomeScreen(
-            vm = vm,
-            actions = actions,
-            onRequestPermission = { permissionLauncher.launch(Media.permissions) },
-        )
-        Screen.Settings -> SettingsScreen(
-            store = vm.store,
-            onBack = vm::back,
-            onLanguage = { tag ->
-                vm.store.chooseLanguage(tag)
-                // Resources are bound to the activity's context, so a new language needs a new activity.
-                (context as? Activity)?.recreate()
-            },
-            onManageMedia = {
-                if (Build.VERSION.SDK_INT >= 31) {
-                    context.startActivity(
-                        Intent(Settings.ACTION_REQUEST_MANAGE_MEDIA, Uri.parse("package:${context.packageName}")),
-                    )
-                }
-            },
-        )
-        is Screen.Collection -> CollectionScreen(vm, screen.source, actions)
-        is Screen.Viewer -> Unit
-        is Screen.Editor -> EditorHost(
-            photo = screen.photo,
-            store = vm.store,
-            directWrite = false,
-            startInCrop = screen.crop || vm.store.startInCrop,
-            onClose = vm::back,
-            onSaved = {
-                vm.reload()
-                vm.back()
-            },
-            onDeleted = {
-                vm.reload()
-                vm.back()
-            },
-        )
+    // Both layers live in one Box: taking the viewer away must redraw what is underneath, and a child
+    // removed straight from the composition's root was leaving the old frame on screen.
+    Box(Modifier.fillMaxSize()) {
+        // The viewer is drawn over the screen it was opened from rather than replacing it. Swiping the
+        // photo away then reveals that screen directly, and the wall keeps its scroll position meanwhile.
+        val top = vm.stack.last()
+        val base = if (top is Screen.Viewer && vm.stack.size > 1) vm.stack[vm.stack.lastIndex - 1] else top
+        when (val screen = base) {
+            Screen.Home -> HomeScreen(
+                vm = vm,
+                actions = actions,
+                onRequestPermission = { permissionLauncher.launch(Media.permissions) },
+            )
+            Screen.Settings -> SettingsScreen(
+                store = vm.store,
+                onBack = vm::back,
+                onLanguage = { tag ->
+                    vm.store.chooseLanguage(tag)
+                    // Resources are bound to the activity's context, so a new language needs a new activity.
+                    (context as? Activity)?.recreate()
+                },
+                onManageMedia = {
+                    if (Build.VERSION.SDK_INT >= 31) {
+                        context.startActivity(
+                            Intent(Settings.ACTION_REQUEST_MANAGE_MEDIA, Uri.parse("package:${context.packageName}")),
+                        )
+                    }
+                },
+            )
+            is Screen.Collection -> CollectionScreen(vm, screen.source, actions)
+            is Screen.Viewer -> Unit
+            is Screen.Editor -> EditorHost(
+                photo = screen.photo,
+                store = vm.store,
+                directWrite = false,
+                startInCrop = screen.crop || vm.store.startInCrop,
+                onClose = vm::back,
+                onSaved = {
+                    vm.reload()
+                    vm.back()
+                },
+                onDeleted = {
+                    vm.reload()
+                    vm.back()
+                },
+            )
+        }
+        if (top is Screen.Viewer) ViewerScreen(vm, top, actions)
     }
-    if (top is Screen.Viewer) ViewerScreen(vm, top, actions)
     vm.busy?.let { BusyDialog(it) }
 }
