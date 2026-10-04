@@ -18,7 +18,7 @@ data class Mark(val time: Long, val originalModified: Long)
  * favourites, which photos we have prepped, and view preferences.
  */
 class Store(context: Context) {
-    private val prefs = context.getSharedPreferences("gallery", Context.MODE_PRIVATE)
+    private val prefs = context.getSharedPreferences(AppLocale.PREFS, Context.MODE_PRIVATE)
 
     var favorites by mutableStateOf(prefs.getStringSet("favorites", emptySet())!!.mapNotNull { it.toLongOrNull() }.toSet())
         private set
@@ -41,6 +41,51 @@ class Store(context: Context) {
     /** Index into the photo wall's zoom levels. */
     var gridZoom by mutableIntStateOf(prefs.getInt("gridZoom", DEFAULT_GRID_ZOOM))
         private set
+
+    var theme by mutableStateOf(enumValues<ThemeMode>()[prefs.getInt("theme", 0)])
+        private set
+
+    /** Language tag, or empty to follow the system. Takes effect when the activity is recreated. */
+    var language by mutableStateOf(prefs.getString(AppLocale.KEY, "").orEmpty())
+        private set
+
+    /** Bucket ids the user has hidden from the Folders tab. */
+    var hiddenFolders by mutableStateOf(prefs.getStringSet("hiddenFolders", emptySet())!!.mapNotNull { it.toLongOrNull() }.toSet())
+        private set
+
+    /** Whether the editor opens straight onto the crop and rotate screen. */
+    var startInCrop by mutableStateOf(prefs.getBoolean("startInCrop", false))
+        private set
+
+    /** Whether leaving the editor with unsaved edits asks first. */
+    var confirmExit by mutableStateOf(prefs.getBoolean("confirmExit", true))
+        private set
+
+    fun chooseStartInCrop(on: Boolean) {
+        startInCrop = on
+        prefs.edit { putBoolean("startInCrop", on) }
+    }
+
+    fun chooseConfirmExit(on: Boolean) {
+        confirmExit = on
+        prefs.edit { putBoolean("confirmExit", on) }
+    }
+
+    fun chooseTheme(mode: ThemeMode) {
+        theme = mode
+        prefs.edit { putInt("theme", mode.ordinal) }
+    }
+
+    fun chooseLanguage(tag: String) {
+        language = tag
+        // Synchronous: the activity is recreated straight after and reads this in attachBaseContext.
+        prefs.edit(commit = true) { putString(AppLocale.KEY, tag) }
+    }
+
+    fun setFolderHidden(id: Long, hidden: Boolean) {
+        hiddenFolders = if (hidden) hiddenFolders + id else hiddenFolders - id
+        prefs.edit { putStringSet("hiddenFolders", hiddenFolders.map { it.toString() }.toSet()) }
+    }
 
     fun setFavorite(ids: Collection<Long>, favorite: Boolean) {
         favorites = if (favorite) favorites + ids else favorites - ids.toSet()

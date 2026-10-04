@@ -1,17 +1,20 @@
 package com.findliujie.fullresshare
 
+import androidx.annotation.StringRes
+
 /** A set of photos the user can browse. */
 sealed interface Source {
-    val title: String
+    /** A fixed collection named by a string resource. */
+    sealed class Named(@StringRes val title: Int) : Source
 
-    data object All : Source { override val title = "Photos" }
-    data object Screenshots : Source { override val title = "Screenshots" }
+    data object All : Named(R.string.photos)
+    data object Screenshots : Named(R.string.screenshots)
 
     /** Photos this app has stamped with an frs_YYYYMMDDHHmm marker, most recently stamped first. */
-    data object FullResShared : Source { override val title = "FullResShared" }
-    data object Favorites : Source { override val title = "Favourites" }
-    data object Trash : Source { override val title = "Trash" }
-    data class Folder(val id: Long, val name: String) : Source { override val title get() = name }
+    data object FullResShared : Named(R.string.fullresshared)
+    data object Favorites : Named(R.string.favourites)
+    data object Trash : Named(R.string.trash)
+    data class Folder(val id: Long, val name: String) : Source
 }
 
 sealed interface Screen {
@@ -22,4 +25,5 @@ sealed interface Screen {
     class Viewer(val source: Source, var currentId: Long) : Screen
     data class Info(val photo: Photo) : Screen
     data class Editor(val photo: Photo) : Screen
+    data object Settings : Screen
 }

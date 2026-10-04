@@ -27,6 +27,24 @@
             </intent-filter>
         </activity>
 
+        <!-- Offers the editor to other apps: in "Open with" when opening an image file, and as an "Edit with" target. -->
+        <activity
+            android:name=".EditActivity"
+            android:exported="true"
+            android:label="@string/editor_label"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.EDIT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+        </activity>
+
         <!-- Share target: receives images from other apps and re-shares them as a file (or a zip). -->
         <activity
             android:name=".share.ReceiveActivity"

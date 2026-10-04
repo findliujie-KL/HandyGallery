@@ -1,27 +1,31 @@
 package com.findliujie.fullresshare.ui
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
+import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -41,32 +45,46 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.findliujie.fullresshare.Photo
 import com.findliujie.fullresshare.PhotoSort
+import com.findliujie.fullresshare.R
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.Year
 import java.time.YearMonth
 import java.time.ZoneId
-import java.time.format.TextStyle
-import java.util.Locale
+import java.time.format.DateTimeFormatter
+import kotlin.math.ln
+import kotlin.math.pow
+import kotlin.math.roundToInt
 
-/** One zoom level of the photo wall. Pinching steps between them. */
+/** One zoom level of the photo wall. Pinching moves between them. */
 private sealed interface Wall {
     /** Compact: equal square cells at least [cell] wide. */
     data class Squares(val cell: Dp) : Wall
@@ -75,7 +93,7 @@ private sealed interface Wall {
     data class Justified(val rowHeight: Dp) : Wall
 }
 
-/** Most enlarged first; [Store.DEFAULT_GRID_ZOOM] is the Gallery-like four-column squares. */
+/** Most enlarged first; Store.DEFAULT_GRID_ZOOM is the Gallery-like four-column squares. */
 private val walls = listOf(Wall.Justified(260.dp), Wall.Justified(150.dp), Wall.Squares(88.dp), Wall.Squares(58.dp))
 
 /** Justified rows are laid out on a grid this many columns wide, each photo spanning its share of them. */
@@ -90,7 +108,7 @@ private sealed interface GridRow {
 }
 
 /** Splits [photos] into month groups by [sort]; null means one unlabelled group. */
-private fun buildRows(photos: List<Photo>, sort: PhotoSort?, wall: Wall, width: Dp): List<GridRow> {
+private fun buildRows(photos: List<Photo>, sort: PhotoSort?, wall: Wall, width: Dp, monthLabel: (YearMonth) -> String): List<GridRow> {
     val rows = ArrayList<GridRow>(photos.size + 24)
     fun addGroup(group: List<Photo>) {
         if (wall is Wall.Justified) justify(group, wall.rowHeight, width, rows) else group.mapTo(rows) { GridRow.Cell(it) }
@@ -100,7 +118,6 @@ private fun buildRows(photos: List<Photo>, sort: PhotoSort?, wall: Wall, width: 
         return rows
     }
     val zone = ZoneId.systemDefault()
-    val thisYear = Year.now(zone).value
     var last: YearMonth? = null
     var group = ArrayList<Photo>()
     for (photo in photos) {
@@ -109,8 +126,7 @@ private fun buildRows(photos: List<Photo>, sort: PhotoSort?, wall: Wall, width: 
             addGroup(group)
             group = ArrayList()
             last = month
-            val name = month.month.getDisplayName(TextStyle.FULL, Locale.getDefault())
-            rows += GridRow.Header("h$month", if (month.year == thisYear) name else "$name ${month.year}")
+            rows += GridRow.Header("h$month", monthLabel(month))
         }
         group += photo
     }
@@ -155,16 +171,11 @@ private fun justify(group: List<Photo>, target: Dp, width: Dp, out: MutableList<
     flush(complete = false)
 }
 
-/** Where a long-press drag started and what was selected before it, so dragging back can shrink the range. */
-private class DragSelect {
-    var anchor = -1
-    var base = emptySet<Long>()
-    var position = Offset.Zero
-}
-
 /**
- * Month-grouped thumbnail grid. Long-press starts a selection; keep dragging to extend it over a
- * range, with the grid scrolling when the finger nears the top or bottom edge.
+ * Thumbnail wall grouped by month. Long-press starts a selection and dragging extends it over a range.
+ *
+ * Pinching moves between zoom levels the way Samsung Gallery does: the current layout scales with the
+ * fingers and fades out while the next one fades in around the same photo, then it settles on release.
  *
  * [selection] null means not in selection mode. Don't give this top content padding: drag hit-testing
  * assumes item offsets start at the grid's own origin.
@@ -181,13 +192,183 @@ fun PhotoGrid(
     modifier: Modifier = Modifier,
     bottomPadding: PaddingValues = PaddingValues(),
     header: (@Composable () -> Unit)? = null,
-) = BoxWithConstraints(modifier) {
-    val wall = walls[zoom.coerceIn(walls.indices)]
-    val rows = remember(photos, sort, wall, maxWidth) { buildRows(photos, sort, wall, maxWidth) }
-    val currentZoom by rememberUpdatedState(zoom)
-    val changeZoom by rememberUpdatedState(onZoom)
+) = BoxWithConstraints(modifier.clipToBounds()) {
+    val density = LocalDensity.current
+    val widthPx = constraints.maxWidth.toFloat()
+    val heightPx = constraints.maxHeight.toFloat()
+    val locale = LocalConfiguration.current.locales[0]
+    val thisYearFormat = DateTimeFormatter.ofPattern(stringResource(R.string.month_this_year), locale)
+    val otherYearFormat = DateTimeFormatter.ofPattern(stringResource(R.string.month_other_year), locale)
+
+    val width = maxWidth
+    val rowsCache = remember(photos, sort, width, locale) { HashMap<Int, List<GridRow>>() }
+    fun rowsFor(level: Int) = rowsCache.getOrPut(level) {
+        val thisYear = Year.now().value
+        buildRows(photos, sort, walls[level], width) { (if (it.year == thisYear) thisYearFormat else otherYearFormat).format(it) }
+    }
+
+    /** How big a cell is at [level], used as the scale between two levels. */
+    fun cellPx(level: Int): Float = with(density) {
+        when (val wall = walls[level]) {
+            is Wall.Justified -> wall.rowHeight.toPx()
+            is Wall.Squares -> {
+                val gap = Gap.toPx()
+                val columns = ((widthPx + gap) / (wall.cell.toPx() + gap)).toInt().coerceAtLeast(1)
+                (widthPx - gap * (columns - 1)) / columns
+            }
+        }
+    }
+
+    // Each level keeps its own scroll position so a half-finished pinch can fall back to where it was.
+    val states = remember { HashMap<Int, LazyGridState>() }
+    fun stateFor(level: Int) = states.getOrPut(level) { LazyGridState() }
+
+    /** The settled level on screen. Mirrors [zoom], but changes in the same frame a pinch commits. */
+    var shown by remember { mutableIntStateOf(zoom.coerceIn(walls.indices)) }
+    /** The level being cross-faded to, with [progress] 0 (all [shown]) to 1 (all [target]). */
+    var target by remember { mutableStateOf<Int?>(null) }
+    var progress by remember { mutableFloatStateOf(0f) }
+    var pivot by remember { mutableStateOf(Offset.Zero) }
+    val scope = rememberCoroutineScope()
+    val settling = remember { arrayOfNulls<Job>(1) }
+    LaunchedEffect(zoom) { if (target == null) shown = zoom.coerceIn(walls.indices) }
+
+    val headerCount = if (header != null) 1 else 0
+
+    /** Opens [to] underneath [shown], scrolled so the photo under the pinch stays under it. */
+    val begin by rememberUpdatedState { to: Int ->
+        val visible = stateFor(shown).layoutInfo.visibleItemsInfo.filter { it.key is Long }
+        val anchor = visible.firstOrNull {
+            pivot.x >= it.offset.x && pivot.x < it.offset.x + it.size.width &&
+                pivot.y >= it.offset.y && pivot.y < it.offset.y + it.size.height
+        } ?: visible.firstOrNull()
+        val state = LazyGridState()
+        if (anchor != null) {
+            val index = rowsFor(to).indexOfFirst { it is GridRow.Cell && it.photo.id == anchor.key }
+            val top = pivot.y - (pivot.y - anchor.offset.y) * cellPx(to) / cellPx(shown)
+            if (index >= 0) state.requestScrollToItem(index + headerCount, -top.roundToInt())
+        }
+        states[to] = state
+        target = to
+        progress = 0f
+    }
+    val commit by rememberUpdatedState { to: Int ->
+        shown = to
+        target = null
+        progress = 0f
+        onZoom(to)
+    }
+
+    val gestures = Modifier.pointerInput(widthPx, heightPx) {
+        // Taken in the Initial pass so two fingers never scroll the grid or start a selection.
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false)
+            var spread = 1f
+            var pinching = false
+            do {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                if (event.changes.count { it.pressed } >= 2) {
+                    if (!pinching) {
+                        pinching = true
+                        settling[0]?.cancel()
+                        // Pick up a transition that was still settling rather than jumping.
+                        spread = target?.let { (cellPx(it) / cellPx(shown)).pow(progress) } ?: 1f
+                        if (target == null) pivot = event.calculateCentroid()
+                    }
+                    spread *= event.calculateZoom()
+                    while (true) {
+                        // Spreading the fingers enlarges, which is the lower index.
+                        val next = if (spread > 1.001f) shown - 1 else if (spread < 0.999f) shown + 1 else -1
+                        if (next !in walls.indices) {
+                            target = null
+                            progress = 0f
+                            spread = 1f
+                            break
+                        }
+                        if (target != next) begin(next)
+                        val ratio = cellPx(next) / cellPx(shown)
+                        val reached = ln(spread) / ln(ratio)
+                        if (reached < 1f) {
+                            progress = reached
+                            break
+                        }
+                        // Passed the next level completely: make it the base and carry on from there.
+                        commit(next)
+                        spread /= ratio
+                    }
+                    event.changes.forEach { it.consume() }
+                }
+            } while (event.changes.any { it.pressed })
+
+            val pending = target
+            if (pinching && pending != null) settling[0] = scope.launch {
+                val end = if (progress > 0.4f) 1f else 0f
+                animate(progress, end, animationSpec = tween(220, easing = FastOutSlowInEasing)) { value, _ -> progress = value }
+                if (end == 1f) commit(pending) else {
+                    target = null
+                    progress = 0f
+                }
+            }
+        }
+    }
+
+    Box(Modifier.fillMaxSize().then(gestures)) {
+        val incoming = target
+        listOfNotNull(shown, incoming).distinct().forEach { level ->
+            key(level) {
+                WallLayer(
+                    rows = rowsFor(level),
+                    photos = photos,
+                    wall = walls[level],
+                    state = stateFor(level),
+                    // Only a settled wall takes taps and selections; mid-transition there are two on screen.
+                    interactive = incoming == null,
+                    selection = selection,
+                    onSelectionChange = onSelectionChange,
+                    onOpen = onOpen,
+                    bottomPadding = bottomPadding,
+                    header = header,
+                    modifier = Modifier.graphicsLayer {
+                        val to = target
+                        if (to != null) {
+                            val ratio = cellPx(to) / cellPx(shown)
+                            // Both layers show the pinched photo at the same size throughout the fade.
+                            val scale = if (level == to) ratio.pow(progress - 1f) else ratio.pow(progress)
+                            scaleX = scale
+                            scaleY = scale
+                            alpha = (if (level == to) progress else 1f - progress).coerceIn(0f, 1f)
+                            transformOrigin = TransformOrigin(pivot.x / widthPx, pivot.y / heightPx)
+                        }
+                    },
+                )
+            }
+        }
+    }
+}
+
+/** Where a long-press drag started and what was selected before it, so dragging back can shrink the range. */
+private class DragSelect {
+    var anchor = -1
+    var base = emptySet<Long>()
+    var position = Offset.Zero
+}
+
+/** One zoom level's grid, with drag-to-select. */
+@Composable
+private fun WallLayer(
+    rows: List<GridRow>,
+    photos: List<Photo>,
+    wall: Wall,
+    state: LazyGridState,
+    interactive: Boolean,
+    selection: Set<Long>?,
+    onSelectionChange: (Set<Long>?) -> Unit,
+    onOpen: (Photo) -> Unit,
+    bottomPadding: PaddingValues,
+    header: (@Composable () -> Unit)?,
+    modifier: Modifier,
+) {
     val indexById = remember(photos) { HashMap<Long, Int>(photos.size).apply { photos.forEachIndexed { i, p -> put(p.id, i) } } }
-    val state = rememberLazyGridState()
     val drag = remember { DragSelect() }
     var autoScroll by remember { mutableFloatStateOf(0f) }
     val currentSelection by rememberUpdatedState(selection)
@@ -224,26 +405,9 @@ fun PhotoGrid(
         contentPadding = bottomPadding,
         horizontalArrangement = Arrangement.spacedBy(Gap),
         verticalArrangement = Arrangement.spacedBy(Gap),
-        modifier = Modifier.fillMaxSize().pointerInput(Unit) {
-            // Pinch steps through the zoom levels. Taken in the Initial pass so two fingers never scroll the grid.
-            awaitEachGesture {
-                awaitFirstDown(requireUnconsumed = false)
-                var spread = 1f
-                do {
-                    val event = awaitPointerEvent(PointerEventPass.Initial)
-                    if (event.changes.count { it.pressed } >= 2) {
-                        spread *= event.calculateZoom()
-                        val step = if (spread > 1.3f) -1 else if (spread < 0.77f) 1 else 0
-                        if (step != 0) {
-                            spread = 1f
-                            val next = (currentZoom + step).coerceIn(walls.indices)
-                            if (next != currentZoom) changeZoom(next)
-                        }
-                        event.changes.forEach { it.consume() }
-                    }
-                } while (event.changes.any { it.pressed })
-            }
-        }.pointerInput(photos) {
+        userScrollEnabled = interactive,
+        modifier = modifier.fillMaxSize().pointerInput(photos, interactive) {
+            if (!interactive) return@pointerInput
             val edge = 96.dp.toPx()
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
@@ -291,7 +455,7 @@ fun PhotoGrid(
                 is GridRow.Cell -> {
                     val photo = row.photo
                     val selected = selection?.contains(photo.id) == true
-                    PhotoCell(photo, row.height, selecting = selection != null, selected = selected) {
+                    PhotoCell(photo, row.height, selecting = selection != null, selected = selected, enabled = interactive) {
                         if (selection == null) onOpen(photo)
                         else onSelectionChange(if (selected) selection - photo.id else selection + photo.id)
                     }
@@ -302,13 +466,13 @@ fun PhotoGrid(
 }
 
 @Composable
-private fun PhotoCell(photo: Photo, height: Dp?, selecting: Boolean, selected: Boolean, onClick: () -> Unit) {
+private fun PhotoCell(photo: Photo, height: Dp?, selecting: Boolean, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
     val inset by animateDpAsState(if (selected) 12.dp else 0.dp, label = "inset")
     val primary = MaterialTheme.colorScheme.primary
     Box(
         (if (height == null) Modifier.aspectRatio(1f) else Modifier.height(height))
             .background(if (selected) primary.copy(alpha = 0.18f) else Color.Transparent)
-            .clickable(onClick = onClick),
+            .clickable(enabled, onClick = onClick),
     ) {
         Thumb(
             photo,
@@ -327,7 +491,7 @@ private fun PhotoCell(photo: Photo, height: Dp?, selecting: Boolean, selected: B
                     .then(if (selected) Modifier else Modifier.border(2.dp, Color.White, CircleShape)),
                 contentAlignment = Alignment.Center,
             ) {
-                if (selected) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = Color.White, modifier = Modifier.size(16.dp))
+                if (selected) Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.selected), tint = Color.White, modifier = Modifier.size(16.dp))
             }
         }
     }
@@ -345,12 +509,16 @@ class PhotoActions(
     val setFavorite: (List<Photo>, Boolean) -> Unit,
 )
 
-/** Top bar shown while selecting: close, count, then the actions for the selected photos. */
+/**
+ * Top bar shown while selecting: close, count, then the actions for the selected photos.
+ * [marked] are the prepped photo ids; when everything selected is prepped, Prep becomes Undo.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SelectionTopBar(
     photos: List<Photo>,
     selection: Set<Long>,
+    marked: Set<Long>,
     inTrash: Boolean,
     actions: PhotoActions,
     onSelectionChange: (Set<Long>?) -> Unit,
@@ -364,35 +532,35 @@ fun SelectionTopBar(
     TopAppBar(
         title = { Text(selection.size.toString()) },
         navigationIcon = {
-            IconButton(onClick = { onSelectionChange(null) }) { Icon(Icons.Filled.Close, contentDescription = "Cancel selection") }
+            IconButton(onClick = { onSelectionChange(null) }) {
+                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.cancel_selection))
+            }
         },
         actions = {
             if (inTrash) {
-                IconButton(onClick = { act(actions.restore) }) { Icon(Icons.Filled.Refresh, contentDescription = "Restore") }
-                IconButton(onClick = { act(actions.delete) }) { Icon(Icons.Filled.Delete, contentDescription = "Delete permanently") }
+                IconButton(onClick = { act(actions.restore) }) { Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.restore)) }
+                IconButton(onClick = { act(actions.delete) }) { Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.delete_permanently)) }
             } else {
                 ShareIconButton(onFullRes = { act(actions.shareFullRes) }, onStock = { act(actions.shareStock) })
-                IconButton(onClick = { act(actions.prep) }) { Icon(FrsIcons.Prep, contentDescription = "Prep for FullResShare") }
-                IconButton(onClick = { act(actions.trash) }) { Icon(Icons.Filled.Delete, contentDescription = "Move to trash") }
+                if (selection.isNotEmpty() && marked.containsAll(selection)) {
+                    IconButton(onClick = { act(actions.unprep) }) { Icon(FrsIcons.Undo, contentDescription = stringResource(R.string.undo_prep)) }
+                } else {
+                    IconButton(onClick = { act(actions.prep) }) { Icon(FrsIcons.Prep, contentDescription = stringResource(R.string.prep)) }
+                }
+                IconButton(onClick = { act(actions.trash) }) { Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.move_to_trash)) }
             }
             var menu by remember { mutableStateOf(false) }
             Box {
-                IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More options") }
+                IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.more_options)) }
                 DropdownMenu(menu, { menu = false }) {
                     DropdownMenuItem(
-                        text = { Text("Select all") },
+                        text = { Text(stringResource(R.string.select_all)) },
                         onClick = { menu = false; onSelectionChange(photos.map { it.id }.toSet()) },
                     )
-                    if (!inTrash) {
-                        DropdownMenuItem(
-                            text = { Text("Favourite") },
-                            onClick = { menu = false; act { actions.setFavorite(it, true) } },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Undo FullResShare prep") },
-                            onClick = { menu = false; act(actions.unprep) },
-                        )
-                    }
+                    if (!inTrash) DropdownMenuItem(
+                        text = { Text(stringResource(R.string.favourite)) },
+                        onClick = { menu = false; act { actions.setFavorite(it, true) } },
+                    )
                 }
             }
         },

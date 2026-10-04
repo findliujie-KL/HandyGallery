@@ -13,6 +13,7 @@ import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
 import com.findliujie.fullresshare.Media
 import com.findliujie.fullresshare.Photo
+import com.findliujie.fullresshare.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -76,7 +77,7 @@ object FileSharer {
             clipData = ClipData(prepared.file.name, arrayOf(prepared.mime), ClipData.Item(uri))
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        startChooser(context, send, "Share Full Res")
+        startChooser(context, send, context.getString(R.string.share_full_res))
     }
 
     /** "Stock Image Share": the ordinary image share, where the receiving app decides about compression. */
@@ -92,7 +93,7 @@ object FileSharer {
             uris.drop(1).forEach { addItem(ClipData.Item(it)) }
         }
         send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        startChooser(context, send, "Stock Image Share")
+        startChooser(context, send, context.getString(R.string.share_stock))
     }
 
     private fun startChooser(context: Context, send: Intent, title: String) {

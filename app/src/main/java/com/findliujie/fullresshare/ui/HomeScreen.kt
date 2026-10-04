@@ -1,10 +1,11 @@
 package com.findliujie.fullresshare.ui
 
-import android.os.Build
-import android.provider.MediaStore
 import android.text.format.Formatter
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,7 +14,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -46,8 +46,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.findliujie.fullresshare.Folder
@@ -56,49 +58,42 @@ import com.findliujie.fullresshare.GalleryViewModel
 import com.findliujie.fullresshare.Media
 import com.findliujie.fullresshare.Photo
 import com.findliujie.fullresshare.PhotoSort
+import com.findliujie.fullresshare.R
 import com.findliujie.fullresshare.Screen
 import com.findliujie.fullresshare.Source
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(
-    vm: GalleryViewModel,
-    actions: PhotoActions,
-    onRequestPermission: () -> Unit,
-    onManageMedia: () -> Unit,
-) {
-    val context = LocalContext.current
+fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission: () -> Unit) {
     val all = vm.photosFor(Source.All)
     var selection by remember { mutableStateOf<Set<Long>?>(null) }
     val selecting = selection != null
     BackHandler(selecting) { selection = null }
+    var showHidden by remember { mutableStateOf(false) }
+    val hidden = vm.store.hiddenFolders
 
     Scaffold(
         topBar = {
             val picked = selection
-            if (picked != null) SelectionTopBar(all, picked, inTrash = false, actions) { selection = it }
+            if (picked != null) SelectionTopBar(all, picked, vm.store.marks.keys, inTrash = false, actions) { selection = it }
             else CenterAlignedTopAppBar(
-                title = { Text("FullResShare") },
+                title = { Text(stringResource(R.string.app_name)) },
                 actions = {
                     var menu by remember { mutableStateOf(false) }
-                    IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More options") }
+                    IconButton(onClick = { menu = true }) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.more_options))
+                    }
                     DropdownMenu(menu, { menu = false }) {
-                        DropdownMenuItem(
-                            text = { Text("Favourites") },
-                            onClick = { menu = false; vm.open(Screen.Collection(Source.Favorites)) },
-                        )
-                        if (vm.homeTab == 0) DropdownMenuItem(
-                            text = { Text("Select items") },
-                            onClick = { menu = false; selection = emptySet() },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Trash") },
-                            onClick = { menu = false; vm.open(Screen.Collection(Source.Trash)) },
-                        )
-                        if (Build.VERSION.SDK_INT >= 31) DropdownMenuItem(
-                            text = { Text(if (MediaStore.canManageMedia(context)) "System prompts: skipped" else "Skip system prompts…") },
-                            onClick = { menu = false; onManageMedia() },
-                        )
+                        @Composable
+                        fun item(label: Int, onClick: () -> Unit) =
+                            DropdownMenuItem(text = { Text(stringResource(label)) }, onClick = { menu = false; onClick() })
+                        item(R.string.favourites) { vm.open(Screen.Collection(Source.Favorites)) }
+                        if (vm.homeTab == 0) item(R.string.select_items) { selection = emptySet() }
+                        else if (hidden.isNotEmpty()) item(if (showHidden) R.string.stop_showing_hidden else R.string.show_hidden) {
+                            showHidden = !showHidden
+                        }
+                        item(R.string.trash) { vm.open(Screen.Collection(Source.Trash)) }
+                        item(R.string.settings) { vm.open(Screen.Settings) }
                     }
                 },
             )
@@ -109,22 +104,20 @@ fun HomeScreen(
                     selected = vm.homeTab == 0,
                     onClick = { vm.homeTab = 0 },
                     icon = { Icon(FrsIcons.Image, contentDescription = null) },
-                    label = { Text("Photos") },
+                    label = { Text(stringResource(R.string.photos)) },
                 )
                 NavigationBarItem(
                     selected = vm.homeTab == 1,
                     onClick = { vm.homeTab = 1 },
                     icon = { Icon(FrsIcons.Folder, contentDescription = null) },
-                    label = { Text("Folders") },
+                    label = { Text(stringResource(R.string.folders)) },
                 )
             }
         },
     ) { padding ->
-        val top = Modifier.padding(top = padding.calculateTopPadding())
-        val bottom = PaddingValues(bottom = padding.calculateBottomPadding())
         when {
-            !vm.canRead -> EmptyHint("Photo access is needed to show your gallery", Modifier.padding(padding)) {
-                Button(onClick = onRequestPermission) { Text("Grant access") }
+            !vm.canRead -> EmptyHint(stringResource(R.string.need_access), Modifier.padding(padding)) {
+                Button(onClick = onRequestPermission) { Text(stringResource(R.string.grant_access)) }
             }
             vm.homeTab == 0 -> PhotoGrid(
                 photos = all,
@@ -134,48 +127,54 @@ fun HomeScreen(
                 onOpen = { vm.open(Screen.Viewer(Source.All, it.id)) },
                 zoom = vm.store.gridZoom,
                 onZoom = vm.store::zoomGrid,
-                modifier = top,
-                bottomPadding = bottom,
+                modifier = Modifier.padding(top = padding.calculateTopPadding()),
+                bottomPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
                 header = {
                     Column {
                         Row(
                             Modifier.fillMaxWidth().padding(top = 8.dp).alpha(if (selecting) 0.4f else 1f),
-                            horizontalArrangement = Arrangement.spacedBy(28.dp, Alignment.CenterHorizontally),
+                            horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Shortcut(Source.Screenshots, vm.photosFor(Source.Screenshots).firstOrNull(), !selecting, vm::open)
-                            Shortcut(Source.FullResShared, vm.photosFor(Source.FullResShared).firstOrNull(), !selecting, vm::open)
+                            // Mirror images of each other: icon outside, thumbnail towards the centre.
+                            Shortcut(Source.Screenshots, FrsIcons.Screenshot, iconFirst = true, vm.photosFor(Source.Screenshots).firstOrNull(), !selecting, vm::open)
+                            Shortcut(Source.FullResShared, FrsIcons.Prep, iconFirst = false, vm.photosFor(Source.FullResShared).firstOrNull(), !selecting, vm::open)
                         }
-                        SortButton(vm.store.photoSort.label, enumValues<PhotoSort>().map { it.label }) {
+                        SortButton(stringResource(vm.store.photoSort.label), enumValues<PhotoSort>().map { stringResource(it.label) }) {
                             vm.store.sortPhotos(enumValues<PhotoSort>()[it])
                         }
                     }
                 },
             )
             else -> FolderGrid(
-                folders = remember(vm.sorted, vm.store.folderSort) { Media.folders(vm.sorted, vm.store.folderSort) },
-                sortLabel = vm.store.folderSort.label,
+                folders = remember(vm.sorted, vm.store.folderSort, hidden, showHidden) {
+                    Media.folders(vm.sorted, vm.store.folderSort).filter { showHidden || it.id !in hidden }
+                },
+                hidden = hidden,
+                sortLabel = stringResource(vm.store.folderSort.label),
                 onSort = { vm.store.sortFolders(enumValues<FolderSort>()[it]) },
                 onOpen = { vm.open(Screen.Collection(Source.Folder(it.id, it.name))) },
+                onHide = { folder, hide -> vm.store.setFolderHidden(folder.id, hide) },
                 padding = padding,
             )
         }
     }
 }
 
+/** A collection's latest photo with the collection's icon beside it; the icon stands in for a text label. */
 @Composable
-private fun Shortcut(source: Source, cover: Photo?, enabled: Boolean, onOpen: (Screen) -> Unit) {
-    Column(
+private fun Shortcut(source: Source, icon: ImageVector, iconFirst: Boolean, cover: Photo?, enabled: Boolean, onOpen: (Screen) -> Unit) {
+    Row(
         Modifier.clip(RoundedCornerShape(16.dp)).clickable(enabled) { onOpen(Screen.Collection(source)) }.padding(4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
+        @Composable
+        fun badge() = Icon(icon, contentDescription = source.title(), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+        if (iconFirst) badge()
         val shape = Modifier.size(88.dp).clip(RoundedCornerShape(16.dp))
-        if (cover != null) Thumb(cover, shape)
-        else Box(shape.then(Modifier.clip(RoundedCornerShape(16.dp)))) {
-            Box(Modifier.fillMaxSize().alpha(0.5f), contentAlignment = Alignment.Center) {
-                Icon(FrsIcons.Image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-        Text(source.title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 6.dp))
+        if (cover != null) Thumb(cover, shape) else Box(shape.background(MaterialTheme.colorScheme.surfaceContainer))
+        if (!iconFirst) badge()
     }
 }
 
@@ -188,7 +187,7 @@ private fun SortButton(current: String, options: List<String>, onPick: (Int) -> 
         Box {
             TextButton(onClick = { open = true }) {
                 Text(current)
-                Icon(FrsIcons.Sort, contentDescription = "Change sort order", Modifier.padding(start = 4.dp).size(18.dp))
+                Icon(FrsIcons.Sort, contentDescription = stringResource(R.string.change_sort), Modifier.padding(start = 4.dp).size(18.dp))
             }
             DropdownMenu(open, { open = false }) {
                 options.forEachIndexed { i, label ->
@@ -199,12 +198,16 @@ private fun SortButton(current: String, options: List<String>, onPick: (Int) -> 
     }
 }
 
+/** Folder cards. Long-pressing one offers to hide it, or to unhide it when hidden ones are being shown. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FolderGrid(
     folders: List<Folder>,
+    hidden: Set<Long>,
     sortLabel: String,
     onSort: (Int) -> Unit,
     onOpen: (Folder) -> Unit,
+    onHide: (Folder, Boolean) -> Unit,
     padding: PaddingValues,
 ) {
     val context = LocalContext.current
@@ -221,10 +224,17 @@ private fun FolderGrid(
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
-            SortButton(sortLabel, enumValues<FolderSort>().map { it.label }, onSort)
+            SortButton(sortLabel, enumValues<FolderSort>().map { stringResource(it.label) }, onSort)
         }
         items(folders, key = { it.id }) { folder ->
-            Column(Modifier.clip(RoundedCornerShape(20.dp)).clickable { onOpen(folder) }) {
+            val isHidden = folder.id in hidden
+            var menu by remember { mutableStateOf(false) }
+            Column(
+                Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .combinedClickable(onClick = { onOpen(folder) }, onLongClick = { menu = true })
+                    .alpha(if (isHidden) 0.45f else 1f),
+            ) {
                 Thumb(folder.cover, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(20.dp)))
                 Text(
                     folder.name,
@@ -234,11 +244,17 @@ private fun FolderGrid(
                     modifier = Modifier.padding(top = 10.dp, start = 2.dp),
                 )
                 Text(
-                    "${folder.count} items · ${Formatter.formatShortFileSize(context, folder.size)}",
+                    stringResource(R.string.items_size, folder.count, Formatter.formatShortFileSize(context, folder.size)),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 2.dp, bottom = 4.dp),
                 )
+                DropdownMenu(menu, { menu = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(if (isHidden) R.string.unhide_folder else R.string.hide_folder)) },
+                        onClick = { menu = false; onHide(folder, !isHidden) },
+                    )
+                }
             }
         }
     }

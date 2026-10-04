@@ -1,5 +1,6 @@
 package com.findliujie.fullresshare.share
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -12,24 +13,30 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.core.content.IntentCompat
 import androidx.lifecycle.lifecycleScope
+import com.findliujie.fullresshare.AppLocale
+import com.findliujie.fullresshare.R
+import com.findliujie.fullresshare.Store
 import com.findliujie.fullresshare.ui.BusyCard
 import com.findliujie.fullresshare.ui.FrsTheme
 import kotlinx.coroutines.launch
 
 /** Share target: takes images from any app and forwards them as a file (one image) or a zip (several). */
 class ReceiveActivity : ComponentActivity() {
+    override fun attachBaseContext(base: Context) = super.attachBaseContext(AppLocale.wrap(base))
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val uris = incomingUris()
         if (uris.isEmpty()) {
-            Toast.makeText(this, "No image received", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.no_image, Toast.LENGTH_SHORT).show()
             finish()
             return
         }
+        val theme = Store(this).theme
         setContent {
-            FrsTheme {
+            FrsTheme(theme) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    BusyCard(if (uris.size == 1) "Preparing original…" else "Zipping ${uris.size} photos…")
+                    BusyCard(if (uris.size == 1) getString(R.string.preparing_original) else getString(R.string.zipping, uris.size))
                 }
             }
         }
@@ -39,7 +46,7 @@ class ReceiveActivity : ComponentActivity() {
             try {
                 FileSharer.launch(this@ReceiveActivity, FileSharer.prepare(applicationContext, uris))
             } catch (e: Exception) {
-                Toast.makeText(this@ReceiveActivity, "Failed: ${e.message}", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@ReceiveActivity, getString(R.string.failed, e.message), Toast.LENGTH_LONG).show()
             }
             finish()
         }

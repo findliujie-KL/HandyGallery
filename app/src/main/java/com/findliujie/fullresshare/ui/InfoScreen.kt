@@ -22,7 +22,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.exifinterface.media.ExifInterface
 import com.findliujie.fullresshare.Media
+import androidx.compose.ui.res.stringResource
 import com.findliujie.fullresshare.Photo
+import com.findliujie.fullresshare.R
 import com.findliujie.fullresshare.PhotoSort
 import com.findliujie.fullresshare.TopTagger
 import kotlinx.coroutines.Dispatchers
@@ -48,9 +50,9 @@ fun InfoScreen(photo: Photo, onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Info") },
+                title = { Text(stringResource(R.string.info)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back)) }
                 },
             )
         },
@@ -79,10 +81,10 @@ fun InfoScreen(photo: Photo, onBack: () -> Unit) {
                 },
                 exif[ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY]?.let { "ISO$it" },
             ).joinToString(" • ")
-            if (camera.isNotBlank() || exposure.isNotBlank()) Entry(camera.ifBlank { "Camera" }, exposure)
+            if (camera.isNotBlank() || exposure.isNotBlank()) Entry(camera.ifBlank { stringResource(R.string.camera) }, exposure)
             TopTagger.find(exif[ExifInterface.TAG_USER_COMMENT])?.let { marker ->
                 val stamped = TopTagger.timeOf(marker)?.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT))
-                Entry("Prepped for FullResShare", listOfNotNull(stamped, marker).joinToString("\n"))
+                Entry(stringResource(R.string.prepped_for), listOfNotNull(stamped, marker).joinToString("\n"))
             }
         }
     }

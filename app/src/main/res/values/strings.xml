@@ -2,4 +2,133 @@
 <resources>
     <string name="app_name">FullResShare</string>
     <string name="share_target_label">Share Full Res</string>
+
+    <!-- Navigation and collections -->
+    <string name="photos">Photos</string>
+    <string name="folders">Folders</string>
+    <string name="screenshots">Screenshots</string>
+    <string name="fullresshared">FullResShared</string>
+    <string name="favourites">Favourites</string>
+    <string name="trash">Trash</string>
+    <string name="settings">Settings</string>
+    <string name="info">Info</string>
+    <string name="back">Back</string>
+    <string name="more_options">More options</string>
+    <string name="select_items">Select items</string>
+    <string name="items_size">%1$d items · %2$s</string>
+    <!-- java.time patterns for the month headings on the photo wall -->
+    <string name="month_this_year" translatable="false">LLLL</string>
+    <string name="month_other_year">LLLL yyyy</string>
+
+    <!-- Access -->
+    <string name="need_access">Photo access is needed to show your gallery</string>
+    <string name="grant_access">Grant access</string>
+
+    <!-- Sorting -->
+    <string name="change_sort">Change sort order</string>
+    <string name="sort_taken">Date taken</string>
+    <string name="sort_added">Date added</string>
+    <string name="sort_modified">Date modified</string>
+    <string name="fsort_recent">Recent</string>
+    <string name="fsort_name_asc">Name (A–Z)</string>
+    <string name="fsort_name_desc">Name (Z–A)</string>
+    <string name="fsort_size">Size</string>
+
+    <!-- Folders -->
+    <string name="hide_folder">Hide folder</string>
+    <string name="unhide_folder">Unhide folder</string>
+    <string name="show_hidden">Show hidden folders</string>
+    <string name="stop_showing_hidden">Stop showing hidden folders</string>
+
+    <!-- Photo actions -->
+    <string name="share">Share</string>
+    <string name="share_full_res">Share Full Res</string>
+    <string name="share_stock">Stock Image Share</string>
+    <string name="prep">Prep for FullResShare</string>
+    <string name="undo_prep">Undo FullResShare prep</string>
+    <string name="edit">Edit</string>
+    <string name="delete">Delete</string>
+    <string name="delete_permanently">Delete permanently</string>
+    <string name="move_to_trash">Move to trash</string>
+    <string name="restore">Restore</string>
+    <string name="favourite">Favourite</string>
+    <string name="unfavourite">Remove from favourites</string>
+    <string name="cancel_selection">Cancel selection</string>
+    <string name="select_all">Select all</string>
+    <string name="selected">Selected</string>
+
+    <!-- Empty states -->
+    <string name="empty_photos">No photos</string>
+    <string name="empty_shared">Photos you prep for FullResShare appear here</string>
+    <string name="empty_favourites">No favourites yet</string>
+    <string name="empty_trash">Trash is empty</string>
+
+    <!-- Editor -->
+    <string name="cancel">Cancel</string>
+    <string name="done">Done</string>
+    <string name="reset">Reset</string>
+    <string name="apply">Apply</string>
+    <string name="undo">Undo</string>
+    <string name="redo">Redo</string>
+    <string name="draw">Draw</string>
+    <string name="arrow">Arrow</string>
+    <string name="pixel">Pixel</string>
+    <string name="blur">Blur</string>
+    <string name="eraser">Eraser</string>
+    <string name="text">Text</string>
+    <string name="text_background">Text background</string>
+    <string name="crop_rotate">Crop and rotate</string>
+    <string name="rotate">Rotate</string>
+    <string name="mosaic">Mosaic</string>
+    <string name="save_copy">Save copy</string>
+    <string name="replace">Replace</string>
+    <string name="copy">Copy</string>
+    <string name="drag_to_delete">Drag here to delete</string>
+    <string name="release_to_delete">Release to delete</string>
+
+    <!-- Info -->
+    <string name="camera">Camera</string>
+    <string name="prepped_for">Prepped for FullResShare</string>
+
+    <!-- Progress and results -->
+    <string name="preparing_original">Preparing original…</string>
+    <string name="zipping">Zipping %1$d photos…</string>
+    <string name="writing_marker">Writing marker…</string>
+    <string name="removing_marker">Removing marker…</string>
+    <string name="prepped_ok">Prepped %1$d — now at the top of WeChat\'s picker</string>
+    <string name="prepped_partial">Prepped %1$d, %2$d failed</string>
+    <string name="undid_prep">Undid prep for %1$d</string>
+    <string name="failed">Failed: %1$s</string>
+    <string name="saving_copy">Saving copy…</string>
+    <string name="saved_copy">Saved as a new photo</string>
+    <string name="replacing">Replacing original…</string>
+    <string name="replaced">Original replaced</string>
+    <string name="copying">Copying…</string>
+    <string name="copied">Edited image copied</string>
+    <string name="no_image">No image received</string>
+
+    <!-- Leaving the editor -->
+    <string name="editor_label">FullResShare Editor</string>
+    <string name="unsaved_title">Save your edits?</string>
+    <string name="unsaved_text">You have edits that haven’t been saved.</string>
+    <string name="discard">Discard</string>
+    <string name="keep_editing">Keep editing</string>
+    <string name="cannot_open">Can’t open this image</string>
+
+    <!-- Settings -->
+    <string name="editor">Editor</string>
+    <string name="start_in_crop">Open in crop mode</string>
+    <string name="start_in_crop_desc">Start every edit on the crop and rotate screen.</string>
+    <string name="confirm_exit">Ask to save before leaving</string>
+    <string name="confirm_exit_desc">When you leave the editor with unsaved edits, offer to save them first.</string>
+    <string name="theme">Theme</string>
+    <string name="theme_system">Follow system</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="language">Language</string>
+    <string name="language_system">System default</string>
+    <string name="skip_prompts">Skip system prompts</string>
+    <string name="skip_prompts_on">On. Prep, replace and trash run without Android asking each time.</string>
+    <string name="skip_prompts_off">Off. Android asks before each change. Tap to open the system setting.</string>
+    <string name="skip_prompts_unsupported">Needs Android 12 or later.</string>
 </resources>

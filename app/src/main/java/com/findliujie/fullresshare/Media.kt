@@ -10,6 +10,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
+import android.provider.OpenableColumns
+import androidx.annotation.StringRes
 import androidx.exifinterface.media.ExifInterface
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -19,9 +21,11 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
-enum class PhotoSort(val label: String) { Taken("Date taken"), Added("Date added"), Modified("Date modified") }
+enum class PhotoSort(@StringRes val label: Int) { Taken(R.string.sort_taken), Added(R.string.sort_added), Modified(R.string.sort_modified) }
 
-enum class FolderSort(val label: String) { Recent("Recent"), NameAsc("Name (A–Z)"), NameDesc("Name (Z–A)"), Size("Size") }
+enum class FolderSort(@StringRes val label: Int) {
+    Recent(R.string.fsort_recent), NameAsc(R.string.fsort_name_asc), NameDesc(R.string.fsort_name_desc), Size(R.string.fsort_size)
+}
 
 data class Photo(
     val id: Long,
@@ -205,8 +209,28 @@ object Media {
         }
     }
 
+    /** Describes an image another app handed us to edit; it may not be in MediaStore at all. */
+    fun photoFor(context: Context, uri: Uri, type: String?): Photo {
+        val resolver = context.contentResolver
+        var name = uri.lastPathSegment ?: "image"
+        var size = 0L
+        runCatching {
+            resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { c ->
+                if (c.moveToFirst()) {
+                    c.getString(0)?.let { name = it }
+                    size = c.getLong(1)
+                }
+            }
+        }
+        return Photo(
+            id = -1, uri = uri, name = name, mime = resolver.getType(uri) ?: type ?: "image/*",
+            dateTaken = 0, dateAdded = 0, dateModified = 0, path = null,
+            bucketId = 0, bucketName = "", size = size, width = 0, height = 0,
+        )
+    }
+
     /** Saves [bitmap] as a new JPEG next to the app's other edits, keeping [source]'s key metadata. */
-    suspend fun saveCopy(context: Context, source: Photo, bitmap: Bitmap): Unit = withContext(Dispatchers.IO) {
+    suspend fun saveCopy(context: Context, source: Photo, bitmap: Bitmap): Uri = withContext(Dispatchers.IO) {
         val exif = readExif(context, source.uri)
         val resolver = context.contentResolver
         val values = ContentValues().apply {
@@ -227,6 +251,7 @@ object Media {
             resolver.delete(target, null, null)
             throw e
         }
+        target
     }
 
     fun canReplace(photo: Photo) = photo.mime in setOf("image/jpeg", "image/png", "image/webp")

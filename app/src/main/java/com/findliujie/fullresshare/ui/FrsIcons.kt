@@ -58,6 +58,10 @@ object FrsIcons {
         icon("Copy", "M16,1H4c-1.1,0 -2,0.9 -2,2v14h2V3h12V1zM19,5H8c-1.1,0 -2,0.9 -2,2v14c0,1.1 0.9,2 2,2h11c1.1,0 2,-0.9 2,-2V7c0,-1.1 -0.9,-2 -2,-2zM19,21H8V7h11v14z")
     }
 
+    val Screenshot by lazy {
+        icon("Screenshot", "M17,1.01L7,1C5.9,1 5,1.9 5,3v18c0,1.1 0.9,2 2,2h10c1.1,0 2,-0.9 2,-2V3C19,1.9 18.1,1.01 17,1.01zM17,18H7V6h10V18zM9.5,8.5H12V7H8v4h1.5V8.5zM12,17h4v-4h-1.5v2.5H12V17z")
+    }
+
     /** "Send to the top": the prep-for-FullResShare action. */
     val Prep by lazy {
         icon("Prep", "M8,11h3v10h2V11h3l-4,-4 -4,4zM4,3v2h16V3H4z")

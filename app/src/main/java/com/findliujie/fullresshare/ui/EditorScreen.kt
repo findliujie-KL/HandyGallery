@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -91,7 +92,9 @@ import com.findliujie.fullresshare.EditItem
 import com.findliujie.fullresshare.EditState
 import com.findliujie.fullresshare.Edits
 import com.findliujie.fullresshare.Media
+import androidx.compose.ui.res.stringResource
 import com.findliujie.fullresshare.Photo
+import com.findliujie.fullresshare.R
 import com.findliujie.fullresshare.StrokeKind
 import com.findliujie.fullresshare.fitRect
 import kotlinx.coroutines.Dispatchers
@@ -117,9 +120,21 @@ private val sizes = listOf("S" to 3f, "M" to 6f, "L" to 12f)
 private val FullCrop = Rect(0f, 0f, 1f, 1f)
 private const val MinCrop = 0.05f
 
+/**
+ * [startInCrop] opens straight onto the crop and rotate screen. With [confirmExit], leaving with
+ * unsaved edits asks first. [canReplace] says whether overwriting the original is possible at all.
+ * [copied] is the edit last put on the clipboard; leaving with exactly that edit counts as saved.
+ */
 @Composable
-fun EditorScreen(photo: Photo, onCancel: () -> Unit, onExport: (EditState, ExportMode) -> Unit) {
-    BackHandler(onBack = onCancel)
+fun EditorScreen(
+    photo: Photo,
+    startInCrop: Boolean,
+    confirmExit: Boolean,
+    canReplace: Boolean,
+    copied: EditState?,
+    onCancel: () -> Unit,
+    onExport: (EditState, ExportMode) -> Unit,
+) {
     val context = LocalContext.current
     val density = LocalDensity.current
     // The preview works on a downsized copy; export replays the same EditState on the full image.
@@ -152,7 +167,21 @@ fun EditorScreen(photo: Photo, onCancel: () -> Unit, onExport: (EditState, Expor
     var zoom by remember { mutableFloatStateOf(1f) }
     var pan by remember { mutableStateOf(Offset.Zero) }
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
-    var cropDraft by remember { mutableStateOf<EditState?>(null) }
+    var cropDraft by remember { mutableStateOf(if (startInCrop) EditState() else null) }
+    var asking by remember { mutableStateOf(false) }
+
+    // Read through state rather than captured: a reference to a local function is cached across
+    // recompositions and would otherwise keep seeing the values from the first one.
+    val latestCopied by rememberUpdatedState(copied)
+    val latestConfirmExit by rememberUpdatedState(confirmExit)
+    val latestOnCancel by rememberUpdatedState(onCancel)
+
+    fun leave() {
+        val current = history[index]
+        if (latestConfirmExit && current != EditState() && current != latestCopied) asking = true else latestOnCancel()
+    }
+    // Registered before the crop and text screens' own handlers, which therefore take priority while open.
+    BackHandler(onBack = ::leave)
     var entry by remember { mutableStateOf<TextEntry?>(null) }
     var draggingLabel by remember { mutableStateOf(false) }
     var binHot by remember { mutableStateOf(false) }
@@ -203,11 +232,11 @@ fun EditorScreen(photo: Photo, onCancel: () -> Unit, onExport: (EditState, Expor
             )
             else Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
                 Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = onCancel) { Text("Cancel", color = Color.White) }
+                    TextButton(onClick = ::leave) { Text(stringResource(R.string.cancel), color = Color.White) }
                     Box(Modifier.weight(1f))
-                    IconButton(onClick = { index-- }, enabled = index > 0) { Icon(FrsIcons.Undo, contentDescription = "Undo") }
+                    IconButton(onClick = { index-- }, enabled = index > 0) { Icon(FrsIcons.Undo, contentDescription = stringResource(R.string.undo)) }
                     IconButton(onClick = { index++ }, enabled = index < history.lastIndex) {
-                        Icon(FrsIcons.Undo, contentDescription = "Redo", Modifier.graphicsLayer { scaleX = -1f })
+                        Icon(FrsIcons.Undo, contentDescription = stringResource(R.string.redo), Modifier.graphicsLayer { scaleX = -1f })
                     }
                 }
 
@@ -342,7 +371,7 @@ fun EditorScreen(photo: Photo, onCancel: () -> Unit, onExport: (EditState, Expor
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Filled.Delete, contentDescription = null)
-                            Text(if (binHot) "Release to delete" else "Drag here to delete", Modifier.padding(start = 8.dp))
+                            Text(stringResource(if (binHot) R.string.release_to_delete else R.string.drag_to_delete), Modifier.padding(start = 8.dp))
                         }
                     }
                 }
@@ -358,15 +387,15 @@ fun EditorScreen(photo: Photo, onCancel: () -> Unit, onExport: (EditState, Expor
                     }
                     if (tool != null) Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = { erasing = !erasing }) {
-                            Icon(FrsIcons.Eraser, contentDescription = "Eraser", tint = if (erasing) Accent else Color.White)
+                            Icon(FrsIcons.Eraser, contentDescription = stringResource(R.string.eraser), tint = if (erasing) Accent else Color.White)
                         }
                         Box(Modifier.padding(horizontal = 4.dp).width(1.dp).height(20.dp).background(Color.Gray))
                         if (tool == ToolMode.Pen) {
-                            Choice("Draw", !arrow && !erasing) { arrow = false; erasing = false }
-                            Choice("Arrow", arrow && !erasing) { arrow = true; erasing = false }
+                            Choice(stringResource(R.string.draw), !arrow && !erasing) { arrow = false; erasing = false }
+                            Choice(stringResource(R.string.arrow), arrow && !erasing) { arrow = true; erasing = false }
                         } else {
-                            Choice("Pixel", !blur && !erasing) { blur = false; erasing = false }
-                            Choice("Blur", blur && !erasing) { blur = true; erasing = false }
+                            Choice(stringResource(R.string.pixel), !blur && !erasing) { blur = false; erasing = false }
+                            Choice(stringResource(R.string.blur), blur && !erasing) { blur = true; erasing = false }
                         }
                         Box(Modifier.weight(1f))
                         sizes.forEach { (label, value) -> Choice(label, widthDp == value) { widthDp = value } }
@@ -378,17 +407,34 @@ fun EditorScreen(photo: Photo, onCancel: () -> Unit, onExport: (EditState, Expor
                         tool = if (tool == mode) null else mode
                         erasing = false
                     }
-                    ToolIcon(Icons.Filled.Edit, "Draw", tool == ToolMode.Pen) { pick(ToolMode.Pen) }
-                    ToolIcon(FrsIcons.Text, "Text", false, ::newLabel)
-                    ToolIcon(FrsIcons.Crop, "Crop and rotate", false) { cropDraft = history[index] }
-                    ToolIcon(FrsIcons.Mosaic, "Mosaic", tool == ToolMode.Mosaic) { pick(ToolMode.Mosaic) }
+                    ToolIcon(Icons.Filled.Edit, stringResource(R.string.draw), tool == ToolMode.Pen) { pick(ToolMode.Pen) }
+                    ToolIcon(FrsIcons.Text, stringResource(R.string.text), false, ::newLabel)
+                    ToolIcon(FrsIcons.Crop, stringResource(R.string.crop_rotate), false) { cropDraft = history[index] }
+                    ToolIcon(FrsIcons.Mosaic, stringResource(R.string.mosaic), tool == ToolMode.Mosaic) { pick(ToolMode.Mosaic) }
                     Box(Modifier.weight(1f))
                     val changed = state != EditState()
-                    ExportButton(FrsIcons.SaveCopy, "Save copy", changed) { onExport(state, ExportMode.SaveCopy) }
-                    ExportButton(FrsIcons.Replace, "Replace", changed && Media.canReplace(photo)) { onExport(state, ExportMode.ReplaceOriginal) }
-                    ExportButton(FrsIcons.Copy, "Copy", true) { onExport(state, ExportMode.Clipboard) }
+                    ExportButton(FrsIcons.SaveCopy, stringResource(R.string.save_copy), changed) { onExport(state, ExportMode.SaveCopy) }
+                    ExportButton(FrsIcons.Replace, stringResource(R.string.replace), changed && canReplace) { onExport(state, ExportMode.ReplaceOriginal) }
+                    ExportButton(FrsIcons.Copy, stringResource(R.string.copy), true) { onExport(state, ExportMode.Clipboard) }
                 }
             }
+
+            if (asking) AlertDialog(
+                onDismissRequest = { asking = false },
+                title = { Text(stringResource(R.string.unsaved_title)) },
+                text = { Text(stringResource(R.string.unsaved_text)) },
+                confirmButton = {
+                    TextButton(onClick = { asking = false; onExport(history[index], ExportMode.SaveCopy) }) {
+                        Text(stringResource(R.string.save_copy))
+                    }
+                },
+                dismissButton = {
+                    Row {
+                        TextButton(onClick = { asking = false; onCancel() }) { Text(stringResource(R.string.discard)) }
+                        TextButton(onClick = { asking = false }) { Text(stringResource(R.string.keep_editing)) }
+                    }
+                },
+            )
 
             entry?.let { current ->
                 TextEntryOverlay(
@@ -468,12 +514,12 @@ private fun TextEntryOverlay(initial: EditItem.Label, onCancel: () -> Unit, onDo
 
     Column(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.8f)).statusBarsPadding().navigationBarsPadding().imePadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onCancel) { Text("Cancel", color = Color.White) }
+            TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel), color = Color.White) }
             Box(Modifier.weight(1f))
             Button(
                 onClick = { onDone(initial.copy(text = text.text.trim(), color = color, boxed = boxed)) },
                 colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color.White),
-            ) { Text("Done") }
+            ) { Text(stringResource(R.string.done)) }
         }
         Box(Modifier.weight(1f).fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
             val ink = Color(color)
@@ -497,7 +543,7 @@ private fun TextEntryOverlay(initial: EditItem.Label, onCancel: () -> Unit, onDo
             IconButton(onClick = { boxed = !boxed }) {
                 Icon(
                     FrsIcons.Text,
-                    contentDescription = "Text background",
+                    contentDescription = stringResource(R.string.text_background),
                     tint = if (boxed) Color.Black else Color.White,
                     modifier = Modifier
                         .clip(RoundedCornerShape(4.dp))
@@ -608,17 +654,17 @@ private fun CropPanel(
             for (x in listOf(frame.left, frame.right)) drawLine(Color.White, Offset(x, mid.y - arm / 2), Offset(x, mid.y + arm / 2), thick)
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { onChange(draft.rotated()) }) { Icon(FrsIcons.RotateRight, contentDescription = "Rotate") }
+            IconButton(onClick = { onChange(draft.rotated()) }) { Icon(FrsIcons.RotateRight, contentDescription = stringResource(R.string.rotate)) }
             Box(Modifier.weight(1f))
             val pristine = draft.turns == 0 && draft.crop == FullCrop
             TextButton(onClick = { onChange(draft.copy(turns = 0, crop = FullCrop)) }, enabled = !pristine) {
-                Text("Reset", color = if (pristine) Color.Gray else Color.White)
+                Text(stringResource(R.string.reset), color = if (pristine) Color.Gray else Color.White)
             }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
-            IconButton(onClick = onCancel) { Icon(Icons.Filled.Close, contentDescription = "Cancel") }
+            IconButton(onClick = onCancel) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.cancel)) }
             Box(Modifier.weight(1f))
-            IconButton(onClick = onDone) { Icon(Icons.Filled.Check, contentDescription = "Apply", tint = Accent) }
+            IconButton(onClick = onDone) { Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.apply), tint = Accent) }
         }
     }
 }

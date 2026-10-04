@@ -61,7 +61,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.findliujie.fullresshare.GalleryViewModel
 import com.findliujie.fullresshare.Media
+import androidx.compose.ui.res.stringResource
 import com.findliujie.fullresshare.Photo
+import com.findliujie.fullresshare.R
 import com.findliujie.fullresshare.Screen
 import com.findliujie.fullresshare.Source
 import kotlinx.coroutines.Dispatchers
@@ -94,20 +96,20 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
                 Modifier.align(Alignment.TopCenter).fillMaxWidth().background(Scrim).statusBarsPadding().padding(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = vm::back) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+                IconButton(onClick = vm::back) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back)) }
                 Box(Modifier.weight(1f))
                 if (!inTrash) {
                     val favorite = current.id in vm.store.favorites
                     IconButton(onClick = { actions.setFavorite(listOf(current), !favorite) }) {
-                        if (favorite) Icon(Icons.Filled.Star, contentDescription = "Remove from favourites", tint = StarYellow)
-                        else Icon(FrsIcons.StarBorder, contentDescription = "Favourite")
+                        if (favorite) Icon(Icons.Filled.Star, contentDescription = stringResource(R.string.unfavourite), tint = StarYellow)
+                        else Icon(FrsIcons.StarBorder, contentDescription = stringResource(R.string.favourite))
                     }
                 }
                 var menu by remember { mutableStateOf(false) }
                 Box {
-                    IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More options") }
+                    IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.more_options)) }
                     DropdownMenu(menu, { menu = false }) {
-                        DropdownMenuItem(text = { Text("Info") }, onClick = { menu = false; vm.open(Screen.Info(current)) })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.info)) }, onClick = { menu = false; vm.open(Screen.Info(current)) })
                     }
                 }
             }
@@ -115,22 +117,22 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Scrim).navigationBarsPadding().padding(vertical = 4.dp),
             ) {
                 if (inTrash) {
-                    BarAction(Icons.Filled.Refresh, "Restore") { actions.restore(listOf(current)) }
-                    BarAction(Icons.Filled.Delete, "Delete") { actions.delete(listOf(current)) }
+                    BarAction(Icons.Filled.Refresh, stringResource(R.string.restore)) { actions.restore(listOf(current)) }
+                    BarAction(Icons.Filled.Delete, stringResource(R.string.delete)) { actions.delete(listOf(current)) }
                 } else {
                     var share by remember { mutableStateOf(false) }
                     Box(Modifier.weight(1f)) {
-                        Row { BarAction(Icons.Filled.Share, "Share") { share = true } }
+                        Row { BarAction(Icons.Filled.Share, stringResource(R.string.share)) { share = true } }
                         ShareMenu(
                             share, { share = false },
                             onFullRes = { actions.shareFullRes(listOf(current)) },
                             onStock = { actions.shareStock(listOf(current)) },
                         )
                     }
-                    if (current.id in vm.store.marks) BarAction(FrsIcons.Undo, "Undo FullResShare prep") { actions.unprep(listOf(current)) }
-                    else BarAction(FrsIcons.Prep, "Prep for FullResShare") { actions.prep(listOf(current)) }
-                    BarAction(Icons.Filled.Edit, "Edit") { vm.open(Screen.Editor(current)) }
-                    BarAction(Icons.Filled.Delete, "Trash") { actions.trash(listOf(current)) }
+                    if (current.id in vm.store.marks) BarAction(FrsIcons.Undo, stringResource(R.string.undo_prep)) { actions.unprep(listOf(current)) }
+                    else BarAction(FrsIcons.Prep, stringResource(R.string.prep)) { actions.prep(listOf(current)) }
+                    BarAction(Icons.Filled.Edit, stringResource(R.string.edit)) { vm.open(Screen.Editor(current)) }
+                    BarAction(Icons.Filled.Delete, stringResource(R.string.trash)) { actions.trash(listOf(current)) }
                 }
             }
         }

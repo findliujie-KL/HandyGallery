@@ -3,7 +3,9 @@ package com.findliujie.fullresshare
 import android.app.Activity
 import android.app.Application
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -11,6 +13,7 @@ import android.provider.MediaStore
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -34,13 +37,13 @@ import androidx.lifecycle.viewModelScope
 import com.findliujie.fullresshare.share.FileSharer
 import com.findliujie.fullresshare.ui.BusyDialog
 import com.findliujie.fullresshare.ui.CollectionScreen
-import com.findliujie.fullresshare.ui.DarkTheme
-import com.findliujie.fullresshare.ui.EditorScreen
-import com.findliujie.fullresshare.ui.ExportMode
+import com.findliujie.fullresshare.ui.EditorHost
 import com.findliujie.fullresshare.ui.FrsTheme
 import com.findliujie.fullresshare.ui.HomeScreen
 import com.findliujie.fullresshare.ui.InfoScreen
 import com.findliujie.fullresshare.ui.PhotoActions
+import com.findliujie.fullresshare.ui.SettingsScreen
+import com.findliujie.fullresshare.ui.isDark
 import com.findliujie.fullresshare.ui.ViewerScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -101,10 +104,19 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 class MainActivity : ComponentActivity() {
     private val vm: GalleryViewModel by viewModels()
 
+    override fun attachBaseContext(base: Context) = super.attachBaseContext(AppLocale.wrap(base))
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        setContent { FrsTheme { App(vm) } }
+        setContent {
+            val dark = isDark(vm.store.theme)
+            // System bar icons must contrast with the app's theme, which may differ from the system's.
+            LaunchedEffect(dark) {
+                val style = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark }
+                enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
+            }
+            FrsTheme(vm.store.theme) { App(vm) }
+        }
     }
 
     override fun onResume() {
@@ -126,7 +138,7 @@ private fun App(vm: GalleryViewModel) {
             try {
                 block()
             } catch (e: Exception) {
-                toast("Failed: ${e.message}")
+                toast(context.getString(R.string.failed, e.message))
             } finally {
                 vm.busy = null
             }
@@ -152,14 +164,14 @@ private fun App(vm: GalleryViewModel) {
     val actions = remember {
         PhotoActions(
             shareFullRes = { photos ->
-                runBusy(if (photos.size == 1) "Preparing original…" else "Zipping ${photos.size} photos…") {
+                runBusy(if (photos.size == 1) context.getString(R.string.preparing_original) else context.getString(R.string.zipping, photos.size)) {
                     FileSharer.launch(context, FileSharer.prepare(context.applicationContext, photos.map { it.uri }))
                 }
             },
             shareStock = { photos -> FileSharer.launchStock(context, photos) },
             prep = { photos ->
                 withConsent(MediaStore.createWriteRequest(resolver, photos.map { it.uri })) {
-                    runBusy("Writing marker…") {
+                    runBusy(context.getString(R.string.writing_marker)) {
                         val existing = vm.store.marks
                         val marks = withContext(Dispatchers.IO) {
                             photos.mapNotNull { photo ->
@@ -171,8 +183,8 @@ private fun App(vm: GalleryViewModel) {
                         vm.store.mark(marks)
                         vm.reload()
                         toast(
-                            if (marks.size == photos.size) "Prepped ${marks.size} — now at the top of WeChat's picker"
-                            else "Prepped ${marks.size}, ${photos.size - marks.size} failed",
+                            if (marks.size == photos.size) context.getString(R.string.prepped_ok, marks.size)
+                            else context.getString(R.string.prepped_partial, marks.size, photos.size - marks.size),
                         )
                     }
                 }
@@ -180,15 +192,14 @@ private fun App(vm: GalleryViewModel) {
             unprep = { photos ->
                 val existing = vm.store.marks
                 val marked = photos.filter { it.id in existing }
-                if (marked.isEmpty()) toast("Nothing here is prepped")
-                else withConsent(MediaStore.createWriteRequest(resolver, marked.map { it.uri })) {
-                    runBusy("Removing marker…") {
+                if (marked.isNotEmpty()) withConsent(MediaStore.createWriteRequest(resolver, marked.map { it.uri })) {
+                    runBusy(context.getString(R.string.removing_marker)) {
                         withContext(Dispatchers.IO) {
                             marked.forEach { TopTagger.untag(context, it, existing.getValue(it.id).originalModified) }
                         }
                         vm.store.unmark(marked.map { it.id })
                         vm.reload()
-                        toast("Undid prep for ${marked.size}")
+                        toast(context.getString(R.string.undid_prep, marked.size))
                     }
                 }
             },
@@ -199,37 +210,6 @@ private fun App(vm: GalleryViewModel) {
         )
     }
 
-    fun export(photo: Photo, edit: EditState, mode: ExportMode) {
-        fun render(message: String, finish: suspend (android.graphics.Bitmap) -> Unit) = runBusy(message) {
-            val bitmap = Edits.renderFull(context.applicationContext, photo, edit)
-            try {
-                finish(bitmap)
-            } finally {
-                bitmap.recycle()
-            }
-        }
-        when (mode) {
-            ExportMode.SaveCopy -> render("Saving copy…") {
-                Media.saveCopy(context.applicationContext, photo, it)
-                vm.reload()
-                vm.back()
-                toast("Saved as a new photo")
-            }
-            ExportMode.ReplaceOriginal -> withConsent(MediaStore.createWriteRequest(resolver, listOf(photo.uri))) {
-                render("Replacing original…") {
-                    Media.replaceOriginal(context.applicationContext, photo, it)
-                    vm.reload()
-                    vm.back()
-                    toast("Original replaced")
-                }
-            }
-            ExportMode.Clipboard -> render("Copying…") {
-                FileSharer.copyToClipboard(context.applicationContext, it)
-                toast("Edited image copied")
-            }
-        }
-    }
-
     LaunchedEffect(Unit) { if (!vm.canRead) permissionLauncher.launch(Media.permissions) }
     BackHandler(vm.stack.size > 1, vm::back)
 
@@ -238,6 +218,15 @@ private fun App(vm: GalleryViewModel) {
             vm = vm,
             actions = actions,
             onRequestPermission = { permissionLauncher.launch(Media.permissions) },
+        )
+        Screen.Settings -> SettingsScreen(
+            store = vm.store,
+            onBack = vm::back,
+            onLanguage = { tag ->
+                vm.store.chooseLanguage(tag)
+                // Resources are bound to the activity's context, so a new language needs a new activity.
+                (context as? Activity)?.recreate()
+            },
             onManageMedia = {
                 if (Build.VERSION.SDK_INT >= 31) {
                     context.startActivity(
@@ -249,9 +238,16 @@ private fun App(vm: GalleryViewModel) {
         is Screen.Collection -> CollectionScreen(vm, screen.source, actions)
         is Screen.Viewer -> ViewerScreen(vm, screen, actions)
         is Screen.Info -> InfoScreen(screen.photo, vm::back)
-        is Screen.Editor -> DarkTheme {
-            EditorScreen(screen.photo, onCancel = vm::back) { edit, mode -> export(screen.photo, edit, mode) }
-        }
+        is Screen.Editor -> EditorHost(
+            photo = screen.photo,
+            store = vm.store,
+            directWrite = false,
+            onClose = vm::back,
+            onSaved = {
+                vm.reload()
+                vm.back()
+            },
+        )
     }
     vm.busy?.let { BusyDialog(it) }
 }

@@ -41,7 +41,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.res.stringResource
 import com.findliujie.fullresshare.Photo
+import com.findliujie.fullresshare.R
+import com.findliujie.fullresshare.Source
+import com.findliujie.fullresshare.ThemeMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -65,8 +69,21 @@ private val DarkColors = darkColorScheme(
 )
 
 @Composable
-fun FrsTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = if (isSystemInDarkTheme()) DarkColors else LightColors, content = content)
+fun FrsTheme(mode: ThemeMode = ThemeMode.System, content: @Composable () -> Unit) {
+    MaterialTheme(colorScheme = if (isDark(mode)) DarkColors else LightColors, content = content)
+}
+
+@Composable
+fun isDark(mode: ThemeMode): Boolean = when (mode) {
+    ThemeMode.System -> isSystemInDarkTheme()
+    ThemeMode.Light -> false
+    ThemeMode.Dark -> true
+}
+
+@Composable
+fun Source.title(): String = when (this) {
+    is Source.Named -> stringResource(title)
+    is Source.Folder -> name
 }
 
 @Composable
@@ -94,8 +111,8 @@ fun BusyDialog(message: String) {
 @Composable
 fun ShareMenu(expanded: Boolean, onDismiss: () -> Unit, onFullRes: () -> Unit, onStock: () -> Unit) {
     DropdownMenu(expanded, onDismiss) {
-        DropdownMenuItem(text = { Text("Share Full Res") }, onClick = { onDismiss(); onFullRes() })
-        DropdownMenuItem(text = { Text("Stock Image Share") }, onClick = { onDismiss(); onStock() })
+        DropdownMenuItem(text = { Text(stringResource(R.string.share_full_res)) }, onClick = { onDismiss(); onFullRes() })
+        DropdownMenuItem(text = { Text(stringResource(R.string.share_stock)) }, onClick = { onDismiss(); onStock() })
     }
 }
 
@@ -103,7 +120,7 @@ fun ShareMenu(expanded: Boolean, onDismiss: () -> Unit, onFullRes: () -> Unit, o
 fun ShareIconButton(onFullRes: () -> Unit, onStock: () -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { open = true }) { Icon(Icons.Filled.Share, contentDescription = "Share") }
+        IconButton(onClick = { open = true }) { Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.share)) }
         ShareMenu(open, { open = false }, onFullRes, onStock)
     }
 }

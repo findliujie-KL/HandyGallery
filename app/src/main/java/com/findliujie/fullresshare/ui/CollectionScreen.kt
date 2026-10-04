@@ -24,7 +24,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import com.findliujie.fullresshare.GalleryViewModel
+import com.findliujie.fullresshare.R
 import com.findliujie.fullresshare.Screen
 import com.findliujie.fullresshare.Source
 
@@ -40,38 +42,47 @@ fun CollectionScreen(vm: GalleryViewModel, source: Source, actions: PhotoActions
     Scaffold(
         topBar = {
             val picked = selection
-            if (picked != null) SelectionTopBar(photos, picked, inTrash = source == Source.Trash, actions) { selection = it }
+            if (picked != null) SelectionTopBar(photos, picked, vm.store.marks.keys, inTrash = source == Source.Trash, actions) { selection = it }
             else TopAppBar(
                 title = {
                     Column {
-                        Text(source.title)
+                        Text(source.title())
                         if (photos.isNotEmpty()) Text(
-                            "${photos.size} items · ${Formatter.formatShortFileSize(context, photos.sumOf { it.size })}",
+                            stringResource(R.string.items_size, photos.size, Formatter.formatShortFileSize(context, photos.sumOf { it.size })),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = vm::back) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+                    IconButton(onClick = vm::back) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
+                    }
                 },
                 actions = {
                     var menu by remember { mutableStateOf(false) }
-                    IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More options") }
+                    IconButton(onClick = { menu = true }) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.more_options))
+                    }
                     DropdownMenu(menu, { menu = false }) {
-                        DropdownMenuItem(text = { Text("Select items") }, onClick = { menu = false; selection = emptySet() })
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.select_items)) },
+                            onClick = { menu = false; selection = emptySet() },
+                        )
                     }
                 },
             )
         },
     ) { padding ->
         if (photos.isEmpty()) EmptyHint(
-            when (source) {
-                Source.FullResShared -> "Photos you prep for FullResShare appear here"
-                Source.Favorites -> "No favourites yet"
-                Source.Trash -> "Trash is empty"
-                else -> "No photos"
-            },
+            stringResource(
+                when (source) {
+                    Source.FullResShared -> R.string.empty_shared
+                    Source.Favorites -> R.string.empty_favourites
+                    Source.Trash -> R.string.empty_trash
+                    else -> R.string.empty_photos
+                },
+            ),
             Modifier.padding(padding),
         )
         else PhotoGrid(
