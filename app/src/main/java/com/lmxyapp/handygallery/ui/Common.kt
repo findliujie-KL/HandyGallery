@@ -180,7 +180,7 @@ private val thumbCache = object : LruCache<String, ImageBitmap>(160 * 1024 * 102
 
 /** Whichever thumbnail of [photo] is already in memory, larger first: an instant stand-in while the real image loads. */
 fun cachedThumb(photo: Photo): ImageBitmap? =
-    thumbCache.get("${photo.cacheKey}@1024") ?: thumbCache.get("${photo.cacheKey}@512")
+    thumbCache.get("${photo.cacheKey}@1536") ?: thumbCache.get("${photo.cacheKey}@1024") ?: thumbCache.get("${photo.cacheKey}@512")
 
 @Composable
 fun Thumb(photo: Photo, modifier: Modifier = Modifier, size: Int = 512) {

@@ -3,8 +3,10 @@ package com.lmxyapp.handygallery.ui
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -16,11 +18,14 @@ import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -41,10 +46,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -60,15 +67,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.lmxyapp.handygallery.Photo
 import com.lmxyapp.handygallery.PhotoSort
@@ -96,7 +108,7 @@ private sealed interface Wall {
 }
 
 /** Most enlarged first; Store.DEFAULT_GRID_ZOOM is the Gallery-like four-column squares. */
-private val walls = listOf(Wall.Justified(260.dp), Wall.Justified(150.dp), Wall.Squares(88.dp), Wall.Squares(58.dp))
+private val walls = listOf(Wall.Justified(420.dp), Wall.Justified(260.dp), Wall.Justified(150.dp), Wall.Squares(88.dp), Wall.Squares(58.dp))
 
 /** Justified rows are laid out on a grid this many columns wide, each photo spanning its share of them. */
 private const val Units = 60
@@ -106,8 +118,8 @@ private sealed interface GridRow {
     /** [sub] marks a folder heading inside a month. */
     data class Header(val key: String, val label: String, val sub: Boolean = false) : GridRow
 
-    /** [height] null means a square cell. */
-    data class Cell(val photo: Photo, val span: Int = 1, val height: Dp? = null) : GridRow
+    /** [height] null means a square cell. [thumb] is the thumbnail size to load, larger for larger cells. */
+    data class Cell(val photo: Photo, val span: Int = 1, val height: Dp? = null, val thumb: Int = 512) : GridRow
 }
 
 /**
@@ -124,7 +136,10 @@ private fun buildRows(
 ): List<GridRow> {
     val rows = ArrayList<GridRow>(photos.size + 24)
     fun addGroup(group: List<Photo>) {
-        if (wall is Wall.Justified) justify(group, wall.rowHeight, width, rows) else group.mapTo(rows) { GridRow.Cell(it) }
+        when (wall) {
+            is Wall.Justified -> justify(group, wall.rowHeight, width, rows)
+            is Wall.Squares -> group.mapTo(rows) { GridRow.Cell(it) }
+        }
     }
     if (sort == null) {
         addGroup(photos)
@@ -175,7 +190,9 @@ private fun justify(group: List<Photo>, target: Dp, width: Dp, out: MutableList<
             var i = 0
             while (spare > 0) { spans[byLoss[i++ % byLoss.size]]++; spare-- }
         }
-        row.forEachIndexed { i, photo -> out += GridRow.Cell(photo, spans[i], height) }
+        // Enlarged cells are several times the size of the square ones and need a sharper thumbnail.
+        val thumb = if (target >= 400.dp) 1536 else 1024
+        row.forEachIndexed { i, photo -> out += GridRow.Cell(photo, spans[i], height, thumb) }
         row = ArrayList()
         sum = 0f
     }
@@ -425,75 +442,278 @@ private fun WallLayer(
         }
     }
 
-    LazyVerticalGrid(
-        columns = if (wall is Wall.Squares) GridCells.Adaptive(wall.cell) else GridCells.Fixed(Units),
-        state = state,
-        contentPadding = bottomPadding,
-        horizontalArrangement = Arrangement.spacedBy(Gap),
-        verticalArrangement = Arrangement.spacedBy(Gap),
-        userScrollEnabled = interactive,
-        modifier = modifier.fillMaxSize().pointerInput(photos, interactive) {
-            if (!interactive) return@pointerInput
-            val edge = 96.dp.toPx()
-            awaitEachGesture {
-                val down = awaitFirstDown(requireUnconsumed = false)
-                val press = awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
-                val index = indexAt(press.position) ?: return@awaitEachGesture
-                drag.anchor = index
-                drag.base = currentSelection.orEmpty()
-                drag.position = press.position
-                changeSelection(drag.base + photos[index].id)
+    // The month each row falls under, for the scroller's label.
+    val months = remember(rows) {
+        var current: String? = null
+        rows.map { row ->
+            if (row is GridRow.Header && !row.sub) current = row.label
+            current
+        }
+    }
+    val headerCount = if (header != null) 1 else 0
+    val density = LocalDensity.current
+    val viewport by remember(state) { derivedStateOf { state.layoutInfo.viewportSize } }
+    val extent = remember(rows, wall, viewport.width, headerCount, density) {
+        measureWall(rows, wall, viewport.width.toFloat(), headerCount, density)
+    }
 
-                // The stock detectDragGesturesAfterLongPress loses the drag to the grid's own scrolling,
-                // which sees moves first. Taking them in the Initial pass keeps the gesture ours; consuming
-                // the release also stops the cell under the finger from treating it as a tap.
-                while (true) {
-                    val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == press.id } ?: break
-                    change.consume()
-                    if (!change.pressed) break
-                    drag.position = change.position
-                    val fromBottom = size.height - change.position.y
-                    autoScroll = when {
-                        fromBottom < edge -> (edge - fromBottom) / 4
-                        change.position.y < edge -> -(edge - change.position.y) / 4
-                        else -> 0f
+    Box(modifier.fillMaxSize()) {
+        LazyVerticalGrid(
+            columns = if (wall is Wall.Squares) GridCells.Adaptive(wall.cell) else GridCells.Fixed(Units),
+            state = state,
+            contentPadding = bottomPadding,
+            horizontalArrangement = Arrangement.spacedBy(Gap),
+            verticalArrangement = Arrangement.spacedBy(Gap),
+            userScrollEnabled = interactive,
+            modifier = Modifier.fillMaxSize().pointerInput(photos, interactive) {
+                if (!interactive) return@pointerInput
+                val edge = 96.dp.toPx()
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val press = awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
+                    val index = indexAt(press.position) ?: return@awaitEachGesture
+                    drag.anchor = index
+                    drag.base = currentSelection.orEmpty()
+                    drag.position = press.position
+                    changeSelection(drag.base + photos[index].id)
+
+                    // The stock detectDragGesturesAfterLongPress loses the drag to the grid's own scrolling,
+                    // which sees moves first. Taking them in the Initial pass keeps the gesture ours; consuming
+                    // the release also stops the cell under the finger from treating it as a tap.
+                    while (true) {
+                        val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == press.id } ?: break
+                        change.consume()
+                        if (!change.pressed) break
+                        drag.position = change.position
+                        val fromBottom = size.height - change.position.y
+                        autoScroll = when {
+                            fromBottom < edge -> (edge - fromBottom) / 4
+                            change.position.y < edge -> -(edge - change.position.y) / 4
+                            else -> 0f
+                        }
+                        extendTo(change.position)
                     }
-                    extendTo(change.position)
+                    drag.anchor = -1
+                    autoScroll = 0f
                 }
-                drag.anchor = -1
-                autoScroll = 0f
-            }
-        },
-    ) {
-        if (header != null) item(key = "top", span = { GridItemSpan(maxLineSpan) }, contentType = "top") { header() }
-        items(
-            count = rows.size,
-            key = { when (val row = rows[it]) { is GridRow.Header -> row.key; is GridRow.Cell -> row.photo.id } },
-            span = { when (val row = rows[it]) { is GridRow.Header -> GridItemSpan(maxLineSpan); is GridRow.Cell -> GridItemSpan(row.span) } },
-            contentType = { if (rows[it] is GridRow.Header) "header" else "cell" },
-        ) { i ->
-            when (val row = rows[i]) {
-                is GridRow.Header -> if (row.sub) Text(
-                    row.label,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 6.dp),
-                ) else Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
+            },
+        ) {
+            if (header != null) item(key = "top", span = { GridItemSpan(maxLineSpan) }, contentType = "top") { header() }
+            items(
+                count = rows.size,
+                key = { when (val row = rows[it]) { is GridRow.Header -> row.key; is GridRow.Cell -> row.photo.id } },
+                span = { when (val row = rows[it]) { is GridRow.Header -> GridItemSpan(maxLineSpan); is GridRow.Cell -> GridItemSpan(row.span) } },
+                contentType = { if (rows[it] is GridRow.Header) "header" else "cell" },
+            ) { i ->
+                when (val row = rows[i]) {
+                    is GridRow.Header -> if (row.sub) Text(
                         row.label,
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.weight(1f).padding(start = 16.dp, top = 20.dp, bottom = 10.dp),
-                    )
-                    if (i == firstHeading && headingAction != null) Box(Modifier.padding(top = 10.dp)) { headingAction() }
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 6.dp),
+                    ) else Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            row.label,
+                            style = MaterialTheme.typography.titleLarge,
+                            modifier = Modifier.weight(1f).padding(start = 16.dp, top = 20.dp, bottom = 10.dp),
+                        )
+                        if (i == firstHeading && headingAction != null) Box(Modifier.padding(top = 10.dp)) { headingAction() }
+                    }
+                    is GridRow.Cell -> {
+                        val photo = row.photo
+                        val selected = selection?.contains(photo.id) == true
+                        PhotoCell(photo, row.height, row.thumb, selecting = selection != null, selected = selected, enabled = interactive) {
+                            if (selection == null) onOpen(photo)
+                            else onSelectionChange(if (selected) selection - photo.id else selection + photo.id)
+                        }
+                    }
                 }
-                is GridRow.Cell -> {
-                    val photo = row.photo
-                    val selected = selection?.contains(photo.id) == true
-                    PhotoCell(photo, row.height, selecting = selection != null, selected = selected, enabled = interactive) {
-                        if (selection == null) onOpen(photo)
-                        else onSelectionChange(if (selected) selection - photo.id else selection + photo.id)
+            }
+        }
+        if (interactive) FastScroller(
+            state = state,
+            extent = extent,
+            label = { index -> months.getOrNull((index - headerCount).coerceIn(0, (months.size - 1).coerceAtLeast(0))) },
+            bottom = bottomPadding.calculateBottomPadding(),
+        )
+    }
+}
+
+/** Where each grid item's line starts and how tall it is, in pixels, and the height of the whole wall. */
+private class Extent(val tops: FloatArray, val heights: FloatArray, val total: Float)
+
+/**
+ * Works out the wall's full layout ahead of time so the scroller can place itself by distance rather
+ * than by item count; rows hold different numbers of photos, and counting items made the handle
+ * speed up and slow down. Heading heights are estimates, which is close enough for this.
+ */
+private fun measureWall(rows: List<GridRow>, wall: Wall, widthPx: Float, headerCount: Int, density: Density): Extent = with(density) {
+    val gap = Gap.toPx()
+    val columns = if (wall is Wall.Squares) ((widthPx + gap) / (wall.cell.toPx() + gap)).toInt().coerceAtLeast(1) else Units
+    val square = (widthPx - gap * (columns - 1)) / columns
+    val count = rows.size + headerCount
+    val tops = FloatArray(count)
+    val heights = FloatArray(count)
+    var y = 0f
+    var used = 0
+    var lineHeight = 0f
+    var lineStart = 0
+
+    fun endLine(until: Int) {
+        if (until > lineStart) {
+            for (k in lineStart until until) {
+                tops[k] = y
+                heights[k] = lineHeight + gap
+            }
+            y += lineHeight + gap
+        }
+        lineStart = until
+        used = 0
+        lineHeight = 0f
+    }
+
+    if (headerCount == 1) {
+        lineHeight = 110.dp.toPx()
+        endLine(1)
+    }
+    rows.forEachIndexed { r, row ->
+        val i = r + headerCount
+        val span = when (row) {
+            is GridRow.Header -> columns
+            is GridRow.Cell -> row.span.coerceAtMost(columns)
+        }
+        if (used + span > columns) endLine(i)
+        used += span
+        val height = when (row) {
+            is GridRow.Header -> (if (row.sub) 36.dp else 64.dp).toPx()
+            is GridRow.Cell -> row.height?.toPx() ?: square
+        }
+        lineHeight = maxOf(lineHeight, height)
+    }
+    endLine(count)
+    Extent(tops, heights, y)
+}
+
+/**
+ * A handle on the right edge that appears while the wall is scrolling and can be dragged to move
+ * through the whole wall quickly; while it is held, a bubble beside it names the month reached.
+ */
+@Composable
+private fun BoxScope.FastScroller(state: LazyGridState, extent: Extent, label: (Int) -> String?, bottom: Dp) {
+    var dragging by remember { mutableStateOf(false) }
+    var shown by remember { mutableStateOf(false) }
+    val scrolling = state.isScrollInProgress
+    LaunchedEffect(scrolling, dragging) {
+        if (scrolling || dragging) shown = true else {
+            delay(600)
+            shown = false
+        }
+    }
+    val alpha by animateFloatAsState(if (shown) 1f else 0f, label = "scroller")
+
+    val viewportHeight = state.layoutInfo.viewportSize.height
+    // Not worth showing on a wall of only a few screens; and once faded out it must not take touches.
+    if (alpha < 0.01f || viewportHeight == 0 || extent.tops.isEmpty() || extent.total < viewportHeight * 4f) return
+    /** The furthest the wall can scroll. */
+    val range = (extent.total - viewportHeight).coerceAtLeast(1f)
+
+    var dragFraction by remember { mutableFloatStateOf(0f) }
+
+    /** How far down the wall is, 0 to 1, by distance. */
+    fun fraction(): Float {
+        if (dragging) return dragFraction
+        val first = state.layoutInfo.visibleItemsInfo.firstOrNull() ?: return 0f
+        val i = first.index.coerceIn(extent.tops.indices)
+        // The line's real height can differ a little from the estimate; scaling keeps the handle from
+        // hopping as one line gives way to the next.
+        val real = first.size.height + state.layoutInfo.mainAxisItemSpacing
+        val within = if (real > 0) state.firstVisibleItemScrollOffset.toFloat() / real * extent.heights[i] else 0f
+        return ((extent.tops[i] + within) / range).coerceIn(0f, 1f)
+    }
+    val handleHeight = 52.dp
+
+    BoxWithConstraints(
+        Modifier.align(Alignment.TopEnd).fillMaxHeight().padding(top = 8.dp, bottom = bottom + 8.dp).graphicsLayer { this.alpha = alpha },
+    ) {
+        val trackPx = constraints.maxHeight - with(LocalDensity.current) { handleHeight.toPx() }
+        val currentFraction by rememberUpdatedState(::fraction)
+        val currentRange by rememberUpdatedState(range)
+        val currentExtent by rememberUpdatedState(extent)
+        val currentTrack by rememberUpdatedState(trackPx)
+        var track by remember { mutableStateOf<LayoutCoordinates?>(null) }
+        var handle by remember { mutableStateOf<LayoutCoordinates?>(null) }
+
+        Row(
+            Modifier.onGloballyPositioned { track = it }.offset { IntOffset(0, (fraction() * trackPx).roundToInt()) },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val text = label(state.firstVisibleItemIndex)
+            if (dragging && text != null) Surface(
+                shape = RoundedCornerShape(50),
+                color = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                shadowElevation = 4.dp,
+                modifier = Modifier.padding(end = 10.dp),
+            ) {
+                Text(text, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            }
+            val arrows = MaterialTheme.colorScheme.onSurfaceVariant
+            Box(
+                Modifier
+                    // Wider than the pill that is drawn, so it is easy to catch.
+                    .size(36.dp, handleHeight)
+                    .onGloballyPositioned { handle = it }
+                    .pointerInput(Unit) {
+                        awaitEachGesture {
+                            val down = awaitFirstDown()
+                            down.consume()
+                            // The handle moves as it is dragged, so its own coordinates shift under the finger;
+                            // positions are taken in the track's coordinates, which stay put.
+                            fun inTrack(local: Offset): Float {
+                                val from = handle
+                                val to = track
+                                return if (from != null && to != null && from.isAttached && to.isAttached) to.localPositionOf(from, local).y else local.y
+                            }
+                            val from = currentFraction()
+                            val grab = inTrack(down.position) - from * currentTrack
+                            dragFraction = from
+                            dragging = true
+                            while (true) {
+                                val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                                change.consume()
+                                if (!change.pressed) break
+                                dragFraction = ((inTrack(change.position) - grab) / currentTrack).coerceIn(0f, 1f)
+                                // The last line that starts at or above the wanted distance, then the rest as an offset.
+                                val y = dragFraction * currentRange
+                                val tops = currentExtent.tops
+                                val found = tops.binarySearch(y)
+                                val index = (if (found >= 0) found else -found - 2).coerceIn(tops.indices)
+                                val into = (y - tops[index]).coerceIn(0f, (currentExtent.heights[index] - 1f).coerceAtLeast(0f))
+                                state.requestScrollToItem(index, into.roundToInt())
+                            }
+                            dragging = false
+                        }
+                    },
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(topStart = 9.dp, bottomStart = 9.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    shadowElevation = 4.dp,
+                    modifier = Modifier.size(18.dp, handleHeight),
+                ) {
+                    Canvas(Modifier.fillMaxSize()) {
+                        val x = size.width / 2
+                        val w = 3.5.dp.toPx()
+                        val stroke = 1.5.dp.toPx()
+                        // An up and a down chevron.
+                        listOf(size.height / 2 - 6.dp.toPx() to -1f, size.height / 2 + 6.dp.toPx() to 1f).forEach { (y, dir) ->
+                            val tip = Offset(x, y + dir * w * 0.6f)
+                            drawLine(arrows, Offset(x - w, y - dir * w * 0.4f), tip, stroke, StrokeCap.Round)
+                            drawLine(arrows, Offset(x + w, y - dir * w * 0.4f), tip, stroke, StrokeCap.Round)
+                        }
                     }
                 }
             }
@@ -502,7 +722,7 @@ private fun WallLayer(
 }
 
 @Composable
-private fun PhotoCell(photo: Photo, height: Dp?, selecting: Boolean, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
+private fun PhotoCell(photo: Photo, height: Dp?, thumb: Int, selecting: Boolean, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
     val inset by animateDpAsState(if (selected) 12.dp else 0.dp, label = "inset")
     val primary = MaterialTheme.colorScheme.primary
     Box(
@@ -513,8 +733,7 @@ private fun PhotoCell(photo: Photo, height: Dp?, selecting: Boolean, selected: B
         Thumb(
             photo,
             Modifier.fillMaxSize().padding(inset).clip(RoundedCornerShape(if (selected) 8.dp else 0.dp)),
-            // Enlarged cells are several times the size of the square ones and need a sharper thumbnail.
-            size = if (height == null) 512 else 1024,
+            size = thumb,
         )
         if (selecting) {
             Box(

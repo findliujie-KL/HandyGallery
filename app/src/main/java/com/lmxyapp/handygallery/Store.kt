@@ -38,8 +38,11 @@ class Store private constructor(context: Context) {
     var folderSort by mutableStateOf(enumValues<FolderSort>()[prefs.getInt("folderSort", 0)])
         private set
 
-    /** Index into the photo wall's zoom levels. */
-    var gridZoom by mutableIntStateOf(prefs.getInt("gridZoom", DEFAULT_GRID_ZOOM))
+    /**
+     * Index into the photo wall's zoom levels. Stored under a new key since a level was added at the
+     * large end; a choice saved under the old key is one index lower.
+     */
+    var gridZoom by mutableIntStateOf(prefs.getInt("wallZoom", prefs.getInt("gridZoom", DEFAULT_GRID_ZOOM - 1) + 1))
         private set
 
     var theme by mutableStateOf(enumValues<ThemeMode>()[prefs.getInt("theme", 0)])
@@ -140,11 +143,11 @@ class Store private constructor(context: Context) {
 
     fun zoomGrid(level: Int) {
         gridZoom = level
-        prefs.edit { putInt("gridZoom", level) }
+        prefs.edit { putInt("wallZoom", level) }
     }
 
     companion object {
-        const val DEFAULT_GRID_ZOOM = 2
+        const val DEFAULT_GRID_ZOOM = 3
 
         @Volatile
         private var instance: Store? = null
