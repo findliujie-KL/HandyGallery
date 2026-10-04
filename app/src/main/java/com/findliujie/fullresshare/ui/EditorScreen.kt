@@ -85,6 +85,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -95,11 +96,13 @@ import com.findliujie.fullresshare.Media
 import androidx.compose.ui.res.stringResource
 import com.findliujie.fullresshare.Photo
 import com.findliujie.fullresshare.R
+import com.findliujie.fullresshare.FigureKind
 import com.findliujie.fullresshare.StrokeKind
 import com.findliujie.fullresshare.fitRect
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
+import kotlin.math.hypot
 import kotlin.math.min
 
 enum class ExportMode { SaveCopy, ReplaceOriginal, Clipboard }
@@ -116,7 +119,13 @@ private val palette = listOf(
 )
 
 /** Stroke widths as they appear on screen, in dp; zooming in therefore draws finer lines. */
-private val sizes = listOf("S" to 3f, "M" to 6f, "L" to 12f)
+private val sizes = listOf(3f to R.string.width_thin, 6f to R.string.width_medium, 12f to R.string.width_thick)
+
+/** Mosaic and blur are this many times wider than a pen line of the same size setting. */
+private const val CoverWidthFactor = 4
+
+/** What a drag with the pen tool creates. */
+private enum class PenShape { Free, Arrow, Rect, Oval }
 private val FullCrop = Rect(0f, 0f, 1f, 1f)
 private const val MinCrop = 0.05f
 
@@ -160,10 +169,12 @@ fun EditorScreen(
 
     var tool by remember { mutableStateOf<ToolMode?>(null) }
     var erasing by remember { mutableStateOf(false) }
-    var arrow by remember { mutableStateOf(false) }
+    var shape by remember { mutableStateOf(PenShape.Free) }
+    /** Mosaic as a box dragged out over an area, rather than brushed on. */
+    var area by remember { mutableStateOf(false) }
     var blur by remember { mutableStateOf(false) }
     var color by remember { mutableIntStateOf(palette[2].toArgb()) }
-    var widthDp by remember { mutableFloatStateOf(sizes[1].second) }
+    var widthDp by remember { mutableFloatStateOf(sizes[1].first) }
     var zoom by remember { mutableFloatStateOf(1f) }
     var pan by remember { mutableStateOf(Offset.Zero) }
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
@@ -185,6 +196,8 @@ fun EditorScreen(
     var entry by remember { mutableStateOf<TextEntry?>(null) }
     var draggingLabel by remember { mutableStateOf(false) }
     var binHot by remember { mutableStateOf(false) }
+    /** True while a mosaic or blur stroke is being brushed, which is shown as a red trail. */
+    var brushing by remember { mutableStateOf(false) }
 
     val bitmap = base
     if (bitmap == null || cover == null) {
@@ -257,39 +270,75 @@ fun EditorScreen(
                                 }
 
                                 val origin = toBase(down.position)
-                                // Text can be grabbed whatever tool is active, as in WeChat.
-                                val labelIndex = start.items.indexOfLast {
-                                    it is EditItem.Label && Edits.hitLabel(it, origin, bw, bh, 12.dp.toPx() / scale)
+                                val reach = 12.dp.toPx() / scale
+                                // Text and shapes can be grabbed whatever tool is active, as in WeChat. The eraser is
+                                // the exception for shapes: there a touch means "remove", not "move".
+                                val grabbed = start.items.indexOfLast {
+                                    when (it) {
+                                        is EditItem.Label -> Edits.hitLabel(it, origin, bw, bh, reach)
+                                        is EditItem.Figure -> !erasing && Edits.hitFigure(it, origin, bw, bh, reach)
+                                        is EditItem.Stroke -> false
+                                    }
                                 }
-                                fun withLabel(s: EditState, label: EditItem.Label) =
-                                    s.copy(items = s.items.toMutableList().also { it[labelIndex] = label })
+                                fun replaced(s: EditState, item: EditItem) =
+                                    s.copy(items = s.items.toMutableList().also { it[grabbed] = item })
+
+                                // Touching an arrow's end or a box's corner drags just that point, which is how a shape
+                                // is reshaped; touching it anywhere else moves the whole thing.
+                                val heldFigure = start.items.getOrNull(grabbed) as? EditItem.Figure
+                                val corner = heldFigure?.let { f ->
+                                    val isArrow = f.kind == FigureKind.Arrow
+                                    val points = if (isArrow) listOf(f.a, f.b) else listOf(f.a, f.b, Offset(f.a.x, f.b.y), Offset(f.b.x, f.a.y))
+                                    points.filter { hypot((it.x - origin.x) * bw, (it.y - origin.y) * bh) <= reach * 2 }
+                                        .minByOrNull { hypot((it.x - origin.x) * bw, (it.y - origin.y) * bh) }
+                                }
+                                /** [heldFigure] with its grabbed [corner] moved to [p]. */
+                                fun reshaped(f: EditItem.Figure, from: Offset, p: Offset): EditItem.Figure = when {
+                                    f.kind == FigureKind.Arrow -> if (from == f.a) f.copy(a = p) else f.copy(b = p)
+                                    // The corner opposite the one held stays where it is.
+                                    else -> f.copy(a = Offset(f.a.x + f.b.x - from.x, f.a.y + f.b.y - from.y), b = p)
+                                }
 
                                 var working = start
-                                var stroke: EditItem.Stroke? = null
+                                var drawn: EditItem? = null
                                 var multi = false
                                 var moved = false
+                                var taken = false
                                 do {
                                     val event = awaitPointerEvent()
+                                    // Nothing sits on top of the canvas, so an already-consumed event means the system took
+                                    // the touch over, as it does for a back swipe from the screen edge. Whatever the touch
+                                    // had started must not become an edit.
+                                    if (event.changes.any { it.isConsumed }) {
+                                        taken = true
+                                        break
+                                    }
                                     val pressed = event.changes.filter { it.pressed }
                                     if (pressed.size >= 2) {
                                         multi = true
                                         val centroid = event.calculateCentroid()
                                         val shift = event.calculatePan()
-                                        if (labelIndex >= 0) {
-                                            // Two fingers on a label resize, rotate and move it.
-                                            val label = working.items[labelIndex] as EditItem.Label
-                                            working = withLabel(
+                                        if (grabbed >= 0) {
+                                            // Two fingers on text or a shape resize, rotate and move it.
+                                            val by = toBase(centroid) - toBase(centroid - shift)
+                                            working = replaced(
                                                 working,
-                                                label.copy(
-                                                    size = (label.size * event.calculateZoom()).coerceIn(0.01f, 2f),
-                                                    angle = label.angle + event.calculateRotation(),
-                                                    center = label.center + (toBase(centroid) - toBase(centroid - shift)),
-                                                ),
+                                                when (val item = working.items[grabbed]) {
+                                                    is EditItem.Label -> item.copy(
+                                                        size = (item.size * event.calculateZoom()).coerceIn(0.01f, 2f),
+                                                        angle = item.angle + event.calculateRotation(),
+                                                        center = item.center + by,
+                                                    )
+                                                    is EditItem.Figure ->
+                                                        Edits.resizeFigure(item, event.calculateZoom(), event.calculateRotation(), bw, bh)
+                                                            .let { it.copy(a = it.a + by, b = it.b + by) }
+                                                    is EditItem.Stroke -> item
+                                                },
                                             )
                                             live = working
                                         } else {
-                                            // Two fingers elsewhere zoom and pan the canvas; abandon any stroke the first finger began.
-                                            stroke = null
+                                            // Two fingers elsewhere zoom and pan the canvas; abandon anything the first finger began.
+                                            drawn = null
                                             working = start
                                             live = null
                                             val newZoom = (zoom * event.calculateZoom()).coerceIn(1f, 8f)
@@ -306,18 +355,33 @@ fun EditorScreen(
                                         val p = toBase(position)
                                         val mode = tool
                                         when {
-                                            labelIndex >= 0 -> if (moved) {
-                                                val label = start.items[labelIndex] as EditItem.Label
-                                                working = withLabel(start, label.copy(center = label.center + (p - origin)))
+                                            heldFigure != null && corner != null -> if (moved) {
+                                                working = replaced(start, reshaped(heldFigure, corner, p))
+                                                live = working
+                                            }
+                                            grabbed >= 0 -> if (moved) {
+                                                val by = p - origin
+                                                working = replaced(
+                                                    start,
+                                                    when (val item = start.items[grabbed]) {
+                                                        is EditItem.Label -> item.copy(center = item.center + by)
+                                                        is EditItem.Figure -> item.copy(a = item.a + by, b = item.b + by)
+                                                        is EditItem.Stroke -> item
+                                                    },
+                                                )
                                                 live = working
                                                 draggingLabel = true
                                                 binHot = position.y > size.height - 96.dp.toPx()
                                             }
                                             mode == null -> Unit
                                             erasing -> {
+                                                val radius = 14.dp.toPx() / scale
                                                 val kept = working.items.filterNot {
-                                                    it is EditItem.Stroke && it.covers == (mode == ToolMode.Mosaic) &&
-                                                        Edits.hitStroke(it, p, bw, bh, 14.dp.toPx() / scale)
+                                                    it.covers == (mode == ToolMode.Mosaic) && when (it) {
+                                                        is EditItem.Stroke -> Edits.hitStroke(it, p, bw, bh, radius)
+                                                        is EditItem.Figure -> Edits.hitFigure(it, p, bw, bh, radius)
+                                                        is EditItem.Label -> false
+                                                    }
                                                 }
                                                 if (kept.size != working.items.size) {
                                                     working = working.copy(items = kept)
@@ -325,15 +389,22 @@ fun EditorScreen(
                                                 }
                                             }
                                             moved -> {
-                                                val kind = when {
-                                                    mode == ToolMode.Mosaic -> if (blur) StrokeKind.Blur else StrokeKind.Mosaic
-                                                    arrow -> StrokeKind.Arrow
-                                                    else -> StrokeKind.Pen
+                                                val covering = mode == ToolMode.Mosaic
+                                                val width = widthDp.dp.toPx() * (if (covering) CoverWidthFactor else 1) / scale / min(bw, bh)
+                                                val figure = when {
+                                                    covering -> if (!area) null else if (blur) FigureKind.BlurRect else FigureKind.MosaicRect
+                                                    shape == PenShape.Arrow -> FigureKind.Arrow
+                                                    shape == PenShape.Rect -> FigureKind.Rect
+                                                    shape == PenShape.Oval -> FigureKind.Oval
+                                                    else -> null
                                                 }
-                                                val widthPx = widthDp.dp.toPx() * if (mode == ToolMode.Mosaic) 4 else 1
-                                                val current = stroke ?: EditItem.Stroke(kind, color, widthPx / scale / min(bw, bh), listOf(origin))
-                                                stroke = current.copy(points = if (kind == StrokeKind.Arrow) listOf(origin, p) else current.points + p)
-                                                working = start.copy(items = start.items + stroke)
+                                                drawn = if (figure != null) EditItem.Figure(figure, color, width, origin, p) else {
+                                                    val kind = if (!covering) StrokeKind.Pen else if (blur) StrokeKind.Blur else StrokeKind.Mosaic
+                                                    val line = drawn as? EditItem.Stroke ?: EditItem.Stroke(kind, color, width, listOf(origin))
+                                                    line.copy(points = line.points + p)
+                                                }
+                                                brushing = covering && figure == null
+                                                working = start.copy(items = start.items + drawn)
                                                 live = working
                                             }
                                         }
@@ -341,12 +412,15 @@ fun EditorScreen(
                                     event.changes.forEach { it.consume() }
                                 } while (event.changes.any { it.pressed })
 
+                                val held = start.items.getOrNull(grabbed)
                                 when {
-                                    labelIndex >= 0 && !moved && !multi -> entry = TextEntry(labelIndex, start.items[labelIndex] as EditItem.Label)
-                                    labelIndex >= 0 && binHot -> commit(start.copy(items = start.items.filterIndexed { i, _ -> i != labelIndex }))
+                                    taken -> Unit
+                                    held is EditItem.Label && !moved && !multi -> entry = TextEntry(grabbed, held)
+                                    held != null && binHot -> commit(start.copy(items = start.items.filterIndexed { i, _ -> i != grabbed }))
                                     else -> commit(working)
                                 }
                                 live = null
+                                brushing = false
                                 draggingLabel = false
                                 binHot = false
                             }
@@ -358,7 +432,11 @@ fun EditorScreen(
                             translate(pan.x, pan.y)
                             scale(zoom, zoom, Offset.Zero)
                         }) {
-                            drawIntoCanvas { Edits.render(it.nativeCanvas, r, shown, bitmap, cover) }
+                            drawIntoCanvas {
+                                Edits.render(it.nativeCanvas, r, shown, bitmap, cover)
+                                val active = if (brushing) shown.items.lastOrNull() else null
+                                Edits.drawGuides(it.nativeCanvas, r, shown, bw, bh, active, 1.dp.toPx() / zoom)
+                            }
                         }
                     }
                     if (draggingLabel) Box(
@@ -391,14 +469,28 @@ fun EditorScreen(
                         }
                         Box(Modifier.padding(horizontal = 4.dp).width(1.dp).height(20.dp).background(Color.Gray))
                         if (tool == ToolMode.Pen) {
-                            Choice(stringResource(R.string.draw), !arrow && !erasing) { arrow = false; erasing = false }
-                            Choice(stringResource(R.string.arrow), arrow && !erasing) { arrow = true; erasing = false }
+                            val shapes = listOf(
+                                Triple(PenShape.Free, FrsIcons.Brush, R.string.draw),
+                                Triple(PenShape.Arrow, FrsIcons.ArrowShape, R.string.arrow),
+                                Triple(PenShape.Rect, FrsIcons.RectShape, R.string.rectangle),
+                                Triple(PenShape.Oval, FrsIcons.OvalShape, R.string.oval),
+                            )
+                            shapes.forEach { (value, icon, label) ->
+                                OptionIcon(icon, stringResource(label), shape == value && !erasing) { shape = value; erasing = false }
+                            }
                         } else {
                             Choice(stringResource(R.string.pixel), !blur && !erasing) { blur = false; erasing = false }
                             Choice(stringResource(R.string.blur), blur && !erasing) { blur = true; erasing = false }
+                            Box(Modifier.padding(horizontal = 4.dp).width(1.dp).height(20.dp).background(Color.Gray))
+                            OptionIcon(FrsIcons.Brush, stringResource(R.string.brush), !area && !erasing) { area = false; erasing = false }
+                            OptionIcon(FrsIcons.RectShape, stringResource(R.string.area), area && !erasing) { area = true; erasing = false }
                         }
                         Box(Modifier.weight(1f))
-                        sizes.forEach { (label, value) -> Choice(label, widthDp == value) { widthDp = value } }
+                        // Each dot is drawn at the width it stands for; mosaic's are wider, so they are shown at half size.
+                        val dotScale = if (tool == ToolMode.Mosaic) CoverWidthFactor / 2f else 1f
+                        sizes.forEach { (value, label) ->
+                            WidthDot((value * dotScale).dp, stringResource(label), widthDp == value) { widthDp = value }
+                        }
                     }
                 }
 
@@ -475,6 +567,24 @@ private fun ExportButton(icon: ImageVector, label: String, enabled: Boolean, onC
     ) {
         Icon(icon, contentDescription = null, tint = Accent)
         Text(label, fontSize = 10.sp, lineHeight = 12.sp, maxLines = 1)
+    }
+}
+
+@Composable
+private fun OptionIcon(icon: ImageVector, description: String, selected: Boolean, onClick: () -> Unit) {
+    Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Icon(icon, contentDescription = description, tint = if (selected) Accent else Color.White, modifier = Modifier.size(22.dp))
+    }
+}
+
+/** A line-width choice shown as a dot of that width. */
+@Composable
+private fun WidthDot(diameter: Dp, description: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier.size(40.dp).clip(CircleShape).clickable(onClickLabel = description, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.size(diameter.coerceAtLeast(4.dp)).clip(CircleShape).background(if (selected) Accent else Color.White))
     }
 }
 

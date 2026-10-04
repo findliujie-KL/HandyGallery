@@ -222,11 +222,45 @@ object Media {
                 }
             }
         }
+        // For an image from the media library, its folder tells us whether it is a screenshot.
+        var bucket = ""
+        var path: String? = null
+        if (uri.authority == MediaStore.AUTHORITY) runCatching {
+            resolver.query(uri, arrayOf(MediaStore.Images.Media.BUCKET_DISPLAY_NAME, MediaStore.Images.Media.DATA), null, null, null)?.use { c ->
+                if (c.moveToFirst()) {
+                    bucket = c.getString(0).orEmpty()
+                    path = c.getString(1)
+                }
+            }
+        }
         return Photo(
             id = -1, uri = uri, name = name, mime = resolver.getType(uri) ?: type ?: "image/*",
-            dateTaken = 0, dateAdded = 0, dateModified = 0, path = null,
-            bucketId = 0, bucketName = "", size = size, width = 0, height = 0,
+            dateTaken = 0, dateAdded = 0, dateModified = 0, path = path,
+            bucketId = 0, bucketName = bucket, size = size, width = 0, height = 0,
         )
+    }
+
+    /**
+     * Finds the media-library photos behind [uris] shared from another app. A media uri names its
+     * photo directly; anything else (e.g. Google Photos' own uris) is matched by file name and size.
+     */
+    suspend fun resolve(context: Context, uris: List<Uri>): List<Photo> = withContext(Dispatchers.IO) {
+        val resolver = context.contentResolver
+        val ids = HashSet<Long>()
+        val named = ArrayList<Pair<String, Long>>()
+        for (uri in uris) {
+            val direct = if (uri.authority == MediaStore.AUTHORITY) uri.lastPathSegment?.toLongOrNull() else null
+            if (direct != null) {
+                ids += direct
+                continue
+            }
+            runCatching {
+                resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { c ->
+                    if (c.moveToFirst()) c.getString(0)?.let { named += it to c.getLong(1) }
+                }
+            }
+        }
+        load(context, trashed = false).filter { photo -> photo.id in ids || named.any { it.first == photo.name && it.second == photo.size } }
     }
 
     /** Saves [bitmap] as a new JPEG next to the app's other edits, keeping [source]'s key metadata. */

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108">
+  <!-- Option B: viewfinder corners around a landscape: the whole frame, nothing lost. -->
+  <rect width="108" height="108" fill="#0F3D2A"/>
+  <g fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M32 44 V36 a4 4 0 0 1 4 -4 H44"/>
+    <path d="M64 32 H72 a4 4 0 0 1 4 4 V44"/>
+    <path d="M32 64 V72 a4 4 0 0 0 4 4 H44"/>
+    <path d="M76 64 V72 a4 4 0 0 1 -4 4 H64"/>
+  </g>
+  <circle cx="63" cy="45" r="4" fill="#FFC53D"/>
+  <path d="M39 67 L49 52 L55 60 L60 54 L69 67 Z" fill="#5FE3A1"/>
+</svg>

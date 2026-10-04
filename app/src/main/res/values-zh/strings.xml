@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">原图分享</string>
+    <string name="app_name">贴心相册</string>
     <string name="share_target_label">原图分享</string>
 
     <string name="photos">照片</string>
     <string name="folders">文件夹</string>
     <string name="screenshots">截图</string>
-    <string name="fullresshared">已标记原图</string>
+    <string name="fullresshared">分享就绪</string>
     <string name="favourites">收藏</string>
     <string name="trash">回收站</string>
     <string name="settings">设置</string>
-    <string name="info">信息</string>
+    <string name="info">图片信息</string>
     <string name="back">返回</string>
     <string name="more_options">更多选项</string>
-    <string name="select_items">选择项目</string>
+    <string name="select_items">勾选</string>
     <string name="items_size">%1$d 项 · %2$s</string>
     <string name="month_other_year">yyyy年M月</string>
 
@@ -37,8 +37,8 @@
     <string name="share">分享</string>
     <string name="share_full_res">原图分享</string>
     <string name="share_stock">普通图片分享</string>
-    <string name="prep">标记为原图待发</string>
-    <string name="undo_prep">撤销原图标记</string>
+    <string name="prep">分享候选区置顶</string>
+    <string name="undo_prep">撤销置顶</string>
     <string name="edit">编辑</string>
     <string name="delete">删除</string>
     <string name="delete_permanently">永久删除</string>
@@ -51,7 +51,7 @@
     <string name="selected">已选</string>
 
     <string name="empty_photos">没有照片</string>
-    <string name="empty_shared">标记为原图待发的照片会显示在这里</string>
+    <string name="empty_shared">分享候选区置顶的照片会显示在这里</string>
     <string name="empty_favourites">还没有收藏</string>
     <string name="empty_trash">回收站是空的</string>
 
@@ -63,6 +63,13 @@
     <string name="redo">重做</string>
     <string name="draw">画笔</string>
     <string name="arrow">箭头</string>
+    <string name="rectangle">矩形</string>
+    <string name="oval">椭圆</string>
+    <string name="brush">涂抹</string>
+    <string name="area">区域</string>
+    <string name="width_thin">细</string>
+    <string name="width_medium">中</string>
+    <string name="width_thick">粗</string>
     <string name="pixel">马赛克</string>
     <string name="blur">模糊</string>
     <string name="eraser">橡皮擦</string>
@@ -71,36 +78,39 @@
     <string name="crop_rotate">裁剪和旋转</string>
     <string name="rotate">旋转</string>
     <string name="mosaic">马赛克</string>
-    <string name="save_copy">另存副本</string>
+    <string name="save_copy">另存</string>
     <string name="replace">替换原图</string>
     <string name="copy">复制</string>
     <string name="drag_to_delete">拖到这里删除</string>
     <string name="release_to_delete">松手删除</string>
 
     <string name="camera">相机</string>
-    <string name="prepped_for">已标记为原图待发</string>
+    <string name="prepped_for">已置顶分享候选区</string>
 
     <string name="preparing_original">正在准备原图…</string>
     <string name="zipping">正在打包 %1$d 张照片…</string>
-    <string name="writing_marker">正在写入标记…</string>
-    <string name="removing_marker">正在移除标记…</string>
-    <string name="prepped_ok">已标记 %1$d 张，现在会出现在微信选图列表最前面</string>
-    <string name="prepped_partial">已标记 %1$d 张，%2$d 张失败</string>
-    <string name="undid_prep">已撤销 %1$d 张的标记</string>
+    <string name="writing_marker">处理中</string>
+    <string name="removing_marker">处理中</string>
+    <string name="prepped_ok">已置顶 %1$d 张</string>
+    <string name="prepped_partial">已置顶 %1$d 张，%2$d 张失败</string>
+    <string name="undid_prep">已撤销 %1$d 张的置顶</string>
     <string name="failed">操作失败：%1$s</string>
     <string name="saving_copy">正在保存副本…</string>
     <string name="saved_copy">已另存为新照片</string>
     <string name="replacing">正在替换原图…</string>
     <string name="replaced">原图已替换</string>
     <string name="copying">正在复制…</string>
-    <string name="copied">已复制编辑后的图片</string>
     <string name="no_image">没有收到图片</string>
 
-    <string name="editor_label">原图分享编辑器</string>
+    <string name="editor_label">贴心相册编辑器</string>
     <string name="unsaved_title">要保存修改吗？</string>
     <string name="unsaved_text">你有尚未保存的修改。</string>
     <string name="discard">不保存</string>
     <string name="keep_editing">继续编辑</string>
+    <string name="screenshot_copied">截图已复制</string>
+    <string name="delete_screenshot_question">要把这张截图移到回收站吗？</string>
+    <string name="keep">保留</string>
+    <string name="prep_not_found">这些图片不在相册中，无法置顶</string>
     <string name="cannot_open">无法打开这张图片</string>
 
     <string name="editor">编辑器</string>
@@ -115,7 +125,7 @@
     <string name="language">语言</string>
     <string name="language_system">跟随系统</string>
     <string name="skip_prompts">跳过系统确认</string>
-    <string name="skip_prompts_on">已开启。标记、替换原图和移到回收站时，系统不再逐次询问。</string>
+    <string name="skip_prompts_on">已开启。置顶、替换原图和移到回收站时，系统不再逐次询问。</string>
     <string name="skip_prompts_off">未开启。每次修改前系统都会询问。点按可打开系统设置。</string>
     <string name="skip_prompts_unsupported">需要 Android 12 或更高版本。</string>
 </resources>

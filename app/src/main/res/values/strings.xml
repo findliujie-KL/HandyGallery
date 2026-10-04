@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">FullResShare</string>
-    <string name="share_target_label">Share Full Res</string>
+    <string name="app_name">Handy Gallery</string>
+    <string name="share_target_label">Share full-res img as file</string>
 
     <!-- Navigation and collections -->
     <string name="photos">Photos</string>
     <string name="folders">Folders</string>
     <string name="screenshots">Screenshots</string>
-    <string name="fullresshared">FullResShared</string>
+    <string name="fullresshared">Ready</string>
     <string name="favourites">Favourites</string>
     <string name="trash">Trash</string>
     <string name="settings">Settings</string>
@@ -42,10 +42,10 @@
 
     <!-- Photo actions -->
     <string name="share">Share</string>
-    <string name="share_full_res">Share Full Res</string>
+    <string name="share_full_res">Share full-res img as file</string>
     <string name="share_stock">Stock Image Share</string>
-    <string name="prep">Prep for FullResShare</string>
-    <string name="undo_prep">Undo FullResShare prep</string>
+    <string name="prep">Front Row</string>
+    <string name="undo_prep">Undo Prep</string>
     <string name="edit">Edit</string>
     <string name="delete">Delete</string>
     <string name="delete_permanently">Delete permanently</string>
@@ -59,7 +59,7 @@
 
     <!-- Empty states -->
     <string name="empty_photos">No photos</string>
-    <string name="empty_shared">Photos you prep for FullResShare appear here</string>
+    <string name="empty_shared">Photos you prep for share appear here</string>
     <string name="empty_favourites">No favourites yet</string>
     <string name="empty_trash">Trash is empty</string>
 
@@ -72,6 +72,13 @@
     <string name="redo">Redo</string>
     <string name="draw">Draw</string>
     <string name="arrow">Arrow</string>
+    <string name="rectangle">Rectangle</string>
+    <string name="oval">Oval</string>
+    <string name="brush">Brush</string>
+    <string name="area">Area</string>
+    <string name="width_thin">Thin</string>
+    <string name="width_medium">Medium</string>
+    <string name="width_thick">Thick</string>
     <string name="pixel">Pixel</string>
     <string name="blur">Blur</string>
     <string name="eraser">Eraser</string>
@@ -88,14 +95,14 @@
 
     <!-- Info -->
     <string name="camera">Camera</string>
-    <string name="prepped_for">Prepped for FullResShare</string>
+    <string name="prepped_for">Prepped for share</string>
 
     <!-- Progress and results -->
     <string name="preparing_original">Preparing original…</string>
     <string name="zipping">Zipping %1$d photos…</string>
-    <string name="writing_marker">Writing marker…</string>
-    <string name="removing_marker">Removing marker…</string>
-    <string name="prepped_ok">Prepped %1$d — now at the top of WeChat\'s picker</string>
+    <string name="writing_marker">In Progress</string>
+    <string name="removing_marker">In Progress</string>
+    <string name="prepped_ok">Prepped %1$d</string>
     <string name="prepped_partial">Prepped %1$d, %2$d failed</string>
     <string name="undid_prep">Undid prep for %1$d</string>
     <string name="failed">Failed: %1$s</string>
@@ -104,15 +111,18 @@
     <string name="replacing">Replacing original…</string>
     <string name="replaced">Original replaced</string>
     <string name="copying">Copying…</string>
-    <string name="copied">Edited image copied</string>
     <string name="no_image">No image received</string>
 
     <!-- Leaving the editor -->
-    <string name="editor_label">FullResShare Editor</string>
+    <string name="editor_label">Handy Editor</string>
     <string name="unsaved_title">Save your edits?</string>
     <string name="unsaved_text">You have edits that haven’t been saved.</string>
     <string name="discard">Discard</string>
     <string name="keep_editing">Keep editing</string>
+    <string name="screenshot_copied">Screenshot copied</string>
+    <string name="delete_screenshot_question">Move this screenshot to the trash?</string>
+    <string name="keep">Keep</string>
+    <string name="prep_not_found">These images aren’t in your gallery, so they can’t be prepped</string>
     <string name="cannot_open">Can’t open this image</string>
 
     <!-- Settings -->

@@ -84,7 +84,8 @@ fun InfoScreen(photo: Photo, onBack: () -> Unit) {
             if (camera.isNotBlank() || exposure.isNotBlank()) Entry(camera.ifBlank { stringResource(R.string.camera) }, exposure)
             TopTagger.find(exif[ExifInterface.TAG_USER_COMMENT])?.let { marker ->
                 val stamped = TopTagger.timeOf(marker)?.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT))
-                Entry(stringResource(R.string.prepped_for), listOfNotNull(stamped, marker).joinToString("\n"))
+                // The marker text is an implementation detail; the user only needs to know when.
+                Entry(stringResource(R.string.prepped_for), stamped.orEmpty())
             }
         }
     }

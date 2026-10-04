@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108">
+  <!-- Option C: a document with a photo inside it: the picture travels as a file. -->
+  <rect width="108" height="108" fill="#E9F7EF"/>
+  <path d="M38 30 H61 L74 43 V76 a4 4 0 0 1 -4 4 H38 a4 4 0 0 1 -4 -4 V34 a4 4 0 0 1 4 -4 Z" fill="#1B8754"/>
+  <path d="M61 30 V39 a4 4 0 0 0 4 4 H74 Z" fill="#7FD6A8"/>
+  <rect x="40" y="50" width="28" height="22" rx="3" fill="#FFFFFF"/>
+  <circle cx="46" cy="56" r="2.5" fill="#FFC53D"/>
+  <path d="M43 69 L50 59 L55 65 L58 61 L65 69 Z" fill="#1B8754"/>
+</svg>

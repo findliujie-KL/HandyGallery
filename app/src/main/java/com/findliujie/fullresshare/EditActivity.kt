@@ -26,7 +26,7 @@ class EditActivity : ComponentActivity() {
         }
         val style = SystemBarStyle.dark(Color.TRANSPARENT)
         enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
-        val store = Store(this)
+        val store = Store.get(this)
         val photo = Media.photoFor(this, uri, intent.type)
         val directWrite = intent.flags and Intent.FLAG_GRANT_WRITE_URI_PERMISSION != 0
 
@@ -46,6 +46,7 @@ class EditActivity : ComponentActivity() {
                         setResult(RESULT_OK, result.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
                         finish()
                     },
+                    onDeleted = { finish() },
                 )
             }
         }

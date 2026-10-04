@@ -8,6 +8,9 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -15,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import com.findliujie.fullresshare.EditState
 import com.findliujie.fullresshare.Edits
 import com.findliujie.fullresshare.Media
@@ -30,15 +34,24 @@ import kotlinx.coroutines.launch
  *
  * [directWrite] says the caller granted write access to the image itself, which is how a non-MediaStore
  * image can be replaced. [onSaved] receives the new copy's uri, or null when the original was replaced.
+ * [onDeleted] is called after the user bins a screenshot they have finished with.
  */
 @Composable
-fun EditorHost(photo: Photo, store: Store, directWrite: Boolean, onClose: () -> Unit, onSaved: (Uri?) -> Unit) {
+fun EditorHost(
+    photo: Photo,
+    store: Store,
+    directWrite: Boolean,
+    onClose: () -> Unit,
+    onSaved: (Uri?) -> Unit,
+    onDeleted: () -> Unit,
+) {
     val context = LocalContext.current
     val app = context.applicationContext
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf<String?>(null) }
     var afterConsent by remember { mutableStateOf<(() -> Unit)?>(null) }
     var copied by remember { mutableStateOf<EditState?>(null) }
+    var offerDelete by remember { mutableStateOf(false) }
     val consentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
         val then = afterConsent
         afterConsent = null
@@ -95,7 +108,9 @@ fun EditorHost(photo: Photo, store: Store, directWrite: Boolean, onClose: () -> 
             ExportMode.Clipboard -> render(R.string.copying, edit) {
                 FileSharer.copyToClipboard(app, it)
                 copied = edit
-                toast(context.getString(R.string.copied))
+                // A screenshot edited and copied has usually served its purpose, so offer to clear it away.
+                // Otherwise nothing is shown: Android's own clipboard preview already confirms the copy.
+                if (inMediaStore && photo.isScreenshot) offerDelete = true
             }
         }
     }
@@ -111,5 +126,24 @@ fun EditorHost(photo: Photo, store: Store, directWrite: Boolean, onClose: () -> 
             onExport = ::export,
         )
         busy?.let { BusyDialog(it) }
+        if (offerDelete) AlertDialog(
+            onDismissRequest = { offerDelete = false },
+            title = { Text(stringResource(R.string.screenshot_copied)) },
+            text = { Text(stringResource(R.string.delete_screenshot_question)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    offerDelete = false
+                    try {
+                        afterConsent = onDeleted
+                        val request = MediaStore.createTrashRequest(context.contentResolver, listOf(photo.uri), true)
+                        consentLauncher.launch(IntentSenderRequest.Builder(request.intentSender).build())
+                    } catch (e: Exception) {
+                        afterConsent = null
+                        toast(context.getString(R.string.failed, e.message))
+                    }
+                }) { Text(stringResource(R.string.move_to_trash)) }
+            },
+            dismissButton = { TextButton(onClick = { offerDelete = false }) { Text(stringResource(R.string.keep)) } },
+        )
     }
 }

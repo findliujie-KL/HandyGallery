@@ -139,7 +139,7 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
     }
 }
 
-/** Icon above label, each taking an equal share of the bar; long labels wrap to a second line. */
+/** Icon above label, each taking an equal share of the bar; long labels wrap onto further lines. */
 @Composable
 private fun RowScope.BarAction(icon: ImageVector, label: String, onClick: () -> Unit) {
     Column(
@@ -147,7 +147,7 @@ private fun RowScope.BarAction(icon: ImageVector, label: String, onClick: () -> 
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(icon, contentDescription = null)
-        Text(label, fontSize = 12.sp, lineHeight = 14.sp, textAlign = TextAlign.Center, maxLines = 2, modifier = Modifier.padding(top = 4.dp))
+        Text(label, fontSize = 12.sp, lineHeight = 14.sp, textAlign = TextAlign.Center, maxLines = 3, modifier = Modifier.padding(top = 4.dp))
     }
 }
 

@@ -50,7 +50,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class GalleryViewModel(app: Application) : AndroidViewModel(app) {
-    val store = Store(app)
+    val store = Store.get(app)
 
     private var photos by mutableStateOf(emptyList<Photo>())
     private var trashed by mutableStateOf(emptyList<Photo>())
@@ -244,6 +244,10 @@ private fun App(vm: GalleryViewModel) {
             directWrite = false,
             onClose = vm::back,
             onSaved = {
+                vm.reload()
+                vm.back()
+            },
+            onDeleted = {
                 vm.reload()
                 vm.back()
             },

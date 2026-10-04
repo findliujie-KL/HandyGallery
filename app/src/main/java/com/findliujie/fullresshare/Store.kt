@@ -17,7 +17,7 @@ data class Mark(val time: Long, val originalModified: Long)
  * App-local state that MediaStore can't hold for us without a system prompt per change:
  * favourites, which photos we have prepped, and view preferences.
  */
-class Store(context: Context) {
+class Store private constructor(context: Context) {
     private val prefs = context.getSharedPreferences(AppLocale.PREFS, Context.MODE_PRIVATE)
 
     var favorites by mutableStateOf(prefs.getStringSet("favorites", emptySet())!!.mapNotNull { it.toLongOrNull() }.toSet())
@@ -124,5 +124,15 @@ class Store(context: Context) {
 
     companion object {
         const val DEFAULT_GRID_ZOOM = 2
+
+        @Volatile
+        private var instance: Store? = null
+
+        /**
+         * The process-wide store. Several activities write marks; separate instances would each hold a
+         * stale copy and overwrite one another's changes.
+         */
+        fun get(context: Context): Store =
+            instance ?: synchronized(this) { instance ?: Store(context.applicationContext).also { instance = it } }
     }
 }

@@ -32,7 +32,7 @@ class ReceiveActivity : ComponentActivity() {
             finish()
             return
         }
-        val theme = Store(this).theme
+        val theme = Store.get(this).theme
         setContent {
             FrsTheme(theme) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

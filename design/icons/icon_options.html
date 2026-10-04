@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FullResShare icon options</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 0; padding: 24px 16px; background: #F4F6F5; color: #1C1F1D; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.lead { margin: 0 0 20px; color: #55605A; font-size: 14px; }
+  .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+  .card { background: #fff; border-radius: 16px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .card h2 { font-size: 16px; margin: 0 0 6px; }
+  .card p { font-size: 13px; line-height: 1.45; color: #55605A; margin: 0 0 14px; }
+  .shapes { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+  .shapes figure { margin: 0; text-align: center; font-size: 11px; color: #7A857F; }
+  .shapes svg { display: block; margin: 0 auto 6px; }
+  .squircle svg { border-radius: 26%; }
+  .circle svg { border-radius: 50%; }
+  .dark { background: #1C1F1D; padding: 10px; border-radius: 12px; }
+</style>
+</head>
+<body>
+<h1>FullResShare: icon options (A chosen and enlarged)</h1>
+<p class="lead">Each is shown as a rounded square and a circle (launchers crop icons differently), at home-screen size and small, and on a dark wallpaper.</p>
+
+<div class="options">
+
+  <div class="card">
+    <h2>A. Send the original</h2>
+    <p>A photo with an arrow leaving it. Closest to the current icon; says "share a picture" at a glance.</p>
+    <div class="shapes">
+      <figure class="squircle"><svg viewBox="0 0 108 108" width="96" height="96"><use href="#icon-a"/></svg>Rounded</figure>
+      <figure class="circle"><svg viewBox="0 0 108 108" width="96" height="96"><use href="#icon-a"/></svg>Circle</figure>
+      <figure class="squircle"><svg viewBox="0 0 108 108" width="44" height="44"><use href="#icon-a"/></svg>Small</figure>
+      <figure class="squircle dark"><svg viewBox="0 0 108 108" width="44" height="44"><use href="#icon-a"/></svg>On dark</figure>
+      <figure class="squircle"><svg viewBox="0 0 108 108" width="96" height="96"><use href="#icon-a-before"/></svg>Before</figure>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>B. Full frame</h2>
+    <p>Viewfinder corners around a landscape: the whole picture, nothing trimmed or compressed. The most distinctive on a crowded home screen.</p>
+    <div class="shapes">
+      <figure class="squircle"><svg viewBox="0 0 108 108" width="96" height="96"><use href="#icon-b"/></svg>Rounded</figure>
+      <figure class="circle"><svg viewBox="0 0 108 108" width="96" height="96"><use href="#icon-b"/></svg>Circle</figure>
+      <figure class="squircle"><svg viewBox="0 0 108 108" width="44" height="44"><use href="#icon-b"/></svg>Small</figure>
+      <figure class="squircle dark"><svg viewBox="0 0 108 108" width="44" height="44"><use href="#icon-b"/></svg>On dark</figure>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>C. Photo as a file</h2>
+    <p>A document with a photo inside it. States the app's actual trick most literally: the picture travels as a file.</p>
+    <div class="shapes">
+      <figure class="squircle"><svg viewBox="0 0 108 108" width="96" height="96"><use href="#icon-c"/></svg>Rounded</figure>
+      <figure class="circle"><svg viewBox="0 0 108 108" width="96" height="96"><use href="#icon-c"/></svg>Circle</figure>
+      <figure class="squircle"><svg viewBox="0 0 108 108" width="44" height="44"><use href="#icon-c"/></svg>Small</figure>
+      <figure class="squircle dark"><svg viewBox="0 0 108 108" width="44" height="44"><use href="#icon-c"/></svg>On dark</figure>
+    </div>
+  </div>
+
+</div>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="a-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2BBE76"/><stop offset="1" stop-color="#0D6A42"/>
+    </linearGradient>
+    <g id="icon-a">
+      <rect width="108" height="108" fill="url(#a-bg)"/>
+      <g transform="translate(54 54) scale(1.15) translate(-52.5 -52)">
+      <g transform="rotate(-6 50 58)">
+        <rect x="30" y="42" width="40" height="32" rx="5" fill="#FFFFFF"/>
+        <circle cx="39" cy="51" r="3.4" fill="#FFC53D"/>
+        <path d="M33 70 L44 57 L51 64 L56 59 L67 70 Z" fill="#1B8754"/>
+      </g>
+      <path d="M57 47 L74 30" stroke="#FFFFFF" stroke-width="5.5" stroke-linecap="round"/>
+      <path d="M62 30 H74 V42" fill="none" stroke="#FFFFFF" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+    </g>
+    <g id="icon-a-before">
+      <rect width="108" height="108" fill="url(#a-bg)"/>
+      <g transform="rotate(-6 50 58)">
+        <rect x="30" y="42" width="40" height="32" rx="5" fill="#FFFFFF"/>
+        <circle cx="39" cy="51" r="3.4" fill="#FFC53D"/>
+        <path d="M33 70 L44 57 L51 64 L56 59 L67 70 Z" fill="#1B8754"/>
+      </g>
+      <path d="M57 47 L74 30" stroke="#FFFFFF" stroke-width="5.5" stroke-linecap="round"/>
+      <path d="M62 30 H74 V42" fill="none" stroke="#FFFFFF" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <g id="icon-b">
+      <rect width="108" height="108" fill="#0F3D2A"/>
+      <g fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M32 44 V36 a4 4 0 0 1 4 -4 H44"/>
+        <path d="M64 32 H72 a4 4 0 0 1 4 4 V44"/>
+        <path d="M32 64 V72 a4 4 0 0 0 4 4 H44"/>
+        <path d="M76 64 V72 a4 4 0 0 1 -4 4 H64"/>
+      </g>
+      <circle cx="63" cy="45" r="4" fill="#FFC53D"/>
+      <path d="M39 67 L49 52 L55 60 L60 54 L69 67 Z" fill="#5FE3A1"/>
+    </g>
+    <g id="icon-c">
+      <rect width="108" height="108" fill="#E9F7EF"/>
+      <path d="M38 30 H61 L74 43 V76 a4 4 0 0 1 -4 4 H38 a4 4 0 0 1 -4 -4 V34 a4 4 0 0 1 4 -4 Z" fill="#1B8754"/>
+      <path d="M61 30 V39 a4 4 0 0 0 4 4 H74 Z" fill="#7FD6A8"/>
+      <rect x="40" y="50" width="28" height="22" rx="3" fill="#FFFFFF"/>
+      <circle cx="46" cy="56" r="2.5" fill="#FFC53D"/>
+      <path d="M43 69 L50 59 L55 65 L58 61 L65 69 Z" fill="#1B8754"/>
+    </g>
+  </defs>
+</svg>
+</body>
+</html>

@@ -3,6 +3,7 @@ package com.findliujie.fullresshare.ui
 import android.text.format.Formatter
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -49,6 +51,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -78,6 +81,7 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
             if (picked != null) SelectionTopBar(all, picked, vm.store.marks.keys, inTrash = false, actions) { selection = it }
             else CenterAlignedTopAppBar(
                 title = { Text(stringResource(R.string.app_name)) },
+                navigationIcon = { AppIcon(Modifier.padding(start = 14.dp)) },
                 actions = {
                     var menu by remember { mutableStateOf(false) }
                     IconButton(onClick = { menu = true }) {
@@ -158,6 +162,16 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
                 padding = padding,
             )
         }
+    }
+}
+
+/** The launcher icon, drawn from its two layers the way a launcher would: the middle two-thirds, rounded. */
+@Composable
+private fun AppIcon(modifier: Modifier = Modifier) {
+    Box(modifier.size(32.dp).clip(RoundedCornerShape(9.dp)), contentAlignment = Alignment.Center) {
+        // The layers are 108 units across with 72 visible, so they are drawn 1.5x the icon's size and cropped.
+        Image(painterResource(R.drawable.ic_launcher_background), contentDescription = null, Modifier.requiredSize(48.dp))
+        Image(painterResource(R.drawable.ic_launcher_foreground), contentDescription = null, Modifier.requiredSize(48.dp))
     }
 }
 

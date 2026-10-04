@@ -60,6 +60,21 @@
             </intent-filter>
         </activity>
 
+        <!-- Second share target: marks the shared photos themselves so they surface first in WeChat's picker. -->
+        <activity
+            android:name=".share.PrepActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:label="@string/prep"
+            android:theme="@style/Theme.Frs.Translucent">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+        </activity>
+
         <provider
             android:name=".share.FrsFileProvider"
             android:authorities="${applicationId}.files"

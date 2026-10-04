@@ -98,7 +98,7 @@ object FileSharer {
 
     private fun startChooser(context: Context, send: Intent, title: String) {
         val chooser = Intent.createChooser(send, title).apply {
-            putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, arrayOf(ComponentName(context, ReceiveActivity::class.java)))
+            putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, arrayOf(ComponentName(context, ReceiveActivity::class.java), ComponentName(context, PrepActivity::class.java)))
             if (context !is Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(chooser)
