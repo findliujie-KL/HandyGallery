@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A photo with an arrow leaving it. Mirrors design/icons/option_a_send_original.svg: the outer group
-     centres the artwork and enlarges it by 1.15 so it fills the circle launchers show. -->
+<!-- A photo with an arrow leaving it. Mirrors design/icons/option_a_send_original.svg at its drawn size;
+     the outer group is where the artwork can be scaled (it was tried at 1.15 with less padding). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
@@ -9,10 +9,8 @@
     <group
         android:pivotX="54"
         android:pivotY="54"
-        android:scaleX="1.15"
-        android:scaleY="1.15"
-        android:translateX="1.725"
-        android:translateY="2.3">
+        android:scaleX="1"
+        android:scaleY="1">
         <group
             android:pivotX="50"
             android:pivotY="58"
