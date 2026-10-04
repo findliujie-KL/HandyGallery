@@ -102,6 +102,13 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         stack += screen
     }
 
+    /** Goes straight to [source] with only the home screen behind it, as a direct link does. */
+    fun jumpTo(source: Source) {
+        if (stack.size > 1) stack.removeRange(1, stack.size)
+        homeTab = 0
+        stack += Screen.Collection(source)
+    }
+
     fun back() {
         if (stack.size > 1) stack.removeAt(stack.lastIndex)
     }
@@ -124,6 +131,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Only a fresh start follows the link; a recreated activity keeps the screen it was on.
+        if (savedInstanceState == null) followLink(intent)
         setContent {
             val dark = isDark(vm.store.theme)
             // System bar icons must contrast with the app's theme, which may differ from the system's.
@@ -132,6 +141,24 @@ class MainActivity : ComponentActivity() {
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
             }
             FrsTheme(vm.store.theme) { App(vm) }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        followLink(intent)
+    }
+
+    /**
+     * Opens the section a direct link names: handygallery://screenshots or handygallery://frontrow.
+     * The launcher shortcuts (res/xml/shortcuts.xml) arrive this way too.
+     */
+    private fun followLink(intent: Intent?) {
+        val link = intent?.data ?: return
+        if (link.scheme != "handygallery") return
+        when (link.host) {
+            "screenshots" -> vm.jumpTo(Source.Screenshots)
+            "frontrow" -> vm.jumpTo(Source.FullResShared)
         }
     }
 

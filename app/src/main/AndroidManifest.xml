@@ -19,12 +19,25 @@
 
         <activity
             android:name=".MainActivity"
+            android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Direct links to a section, for other apps and launchers: handygallery://screenshots
+                 and handygallery://frontrow. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="handygallery" android:host="screenshots" />
+                <data android:scheme="handygallery" android:host="frontrow" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
 
         <!-- Offers the editor to other apps: in "Open with" when opening an image file, and as an "Edit with" target. -->

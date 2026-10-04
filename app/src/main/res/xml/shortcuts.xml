@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long-pressing the launcher icon offers these. They use the same direct links other apps can. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="screenshots"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_screenshots"
+        android:shortcutShortLabel="@string/screenshots"
+        android:shortcutLongLabel="@string/screenshots">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.lmxyapp.handygallery"
+            android:targetClass="com.lmxyapp.handygallery.MainActivity"
+            android:data="handygallery://screenshots" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="front_row"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_front_row"
+        android:shortcutShortLabel="@string/fullresshared"
+        android:shortcutLongLabel="@string/fullresshared">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.lmxyapp.handygallery"
+            android:targetClass="com.lmxyapp.handygallery.MainActivity"
+            android:data="handygallery://frontrow" />
+    </shortcut>
+</shortcuts>
