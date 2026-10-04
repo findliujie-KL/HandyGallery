@@ -1,4 +1,4 @@
-package com.findliujie.fullresshare.ui
+package com.lmxyapp.handygallery.ui
 
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animate
@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -68,9 +69,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.findliujie.fullresshare.Photo
-import com.findliujie.fullresshare.PhotoSort
-import com.findliujie.fullresshare.R
+import com.lmxyapp.handygallery.Photo
+import com.lmxyapp.handygallery.PhotoSort
+import com.lmxyapp.handygallery.R
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -177,6 +178,8 @@ private fun justify(group: List<Photo>, target: Dp, width: Dp, out: MutableList<
  * Pinching moves between zoom levels the way Samsung Gallery does: the current layout scales with the
  * fingers and fades out while the next one fades in around the same photo, then it settles on release.
  *
+ * [header] scrolls above the photos; [headingAction] sits at the right of the first month heading.
+ *
  * [selection] null means not in selection mode. Don't give this top content padding: drag hit-testing
  * assumes item offsets start at the grid's own origin.
  */
@@ -192,6 +195,7 @@ fun PhotoGrid(
     modifier: Modifier = Modifier,
     bottomPadding: PaddingValues = PaddingValues(),
     header: (@Composable () -> Unit)? = null,
+    headingAction: (@Composable () -> Unit)? = null,
 ) = BoxWithConstraints(modifier.clipToBounds()) {
     val density = LocalDensity.current
     val widthPx = constraints.maxWidth.toFloat()
@@ -328,6 +332,7 @@ fun PhotoGrid(
                     onOpen = onOpen,
                     bottomPadding = bottomPadding,
                     header = header,
+                    headingAction = headingAction,
                     modifier = Modifier.graphicsLayer {
                         val to = target
                         if (to != null) {
@@ -366,8 +371,10 @@ private fun WallLayer(
     onOpen: (Photo) -> Unit,
     bottomPadding: PaddingValues,
     header: (@Composable () -> Unit)?,
+    headingAction: (@Composable () -> Unit)?,
     modifier: Modifier,
 ) {
+    val firstHeading = remember(rows) { rows.indexOfFirst { it is GridRow.Header } }
     val indexById = remember(photos) { HashMap<Long, Int>(photos.size).apply { photos.forEachIndexed { i, p -> put(p.id, i) } } }
     val drag = remember { DragSelect() }
     var autoScroll by remember { mutableFloatStateOf(0f) }
@@ -447,11 +454,14 @@ private fun WallLayer(
             contentType = { if (rows[it] is GridRow.Header) "header" else "cell" },
         ) { i ->
             when (val row = rows[i]) {
-                is GridRow.Header -> Text(
-                    row.label,
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(start = 16.dp, top = 20.dp, bottom = 10.dp),
-                )
+                is GridRow.Header -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        row.label,
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.weight(1f).padding(start = 16.dp, top = 20.dp, bottom = 10.dp),
+                    )
+                    if (i == firstHeading && headingAction != null) Box(Modifier.padding(top = 10.dp)) { headingAction() }
+                }
                 is GridRow.Cell -> {
                     val photo = row.photo
                     val selected = selection?.contains(photo.id) == true
@@ -511,7 +521,7 @@ class PhotoActions(
 
 /**
  * Top bar shown while selecting: close, count, then the actions for the selected photos.
- * [marked] are the prepped photo ids; when everything selected is prepped, Prep becomes Undo.
+ * [marked] are the photo ids already in the front row; when everything selected is, the button offers a choice.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -542,11 +552,11 @@ fun SelectionTopBar(
                 IconButton(onClick = { act(actions.delete) }) { Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.delete_permanently)) }
             } else {
                 ShareIconButton(onFullRes = { act(actions.shareFullRes) }, onStock = { act(actions.shareStock) })
-                if (selection.isNotEmpty() && marked.containsAll(selection)) {
-                    IconButton(onClick = { act(actions.unprep) }) { Icon(FrsIcons.Undo, contentDescription = stringResource(R.string.undo_prep)) }
-                } else {
-                    IconButton(onClick = { act(actions.prep) }) { Icon(FrsIcons.Prep, contentDescription = stringResource(R.string.prep)) }
-                }
+                FrontRowButton(
+                    alreadyThere = selection.isNotEmpty() && marked.containsAll(selection),
+                    onPrep = { act(actions.prep) },
+                    onRemove = { act(actions.unprep) },
+                )
                 IconButton(onClick = { act(actions.trash) }) { Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.move_to_trash)) }
             }
             var menu by remember { mutableStateOf(false) }

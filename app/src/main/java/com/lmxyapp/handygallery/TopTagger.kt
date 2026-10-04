@@ -1,4 +1,4 @@
-package com.findliujie.fullresshare
+package com.lmxyapp.handygallery
 
 import android.content.Context
 import android.media.MediaScannerConnection

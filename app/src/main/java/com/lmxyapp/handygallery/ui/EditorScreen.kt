@@ -1,4 +1,4 @@
-package com.findliujie.fullresshare.ui
+package com.lmxyapp.handygallery.ui
 
 import android.graphics.Bitmap
 import android.graphics.Matrix
@@ -89,16 +89,16 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.findliujie.fullresshare.EditItem
-import com.findliujie.fullresshare.EditState
-import com.findliujie.fullresshare.Edits
-import com.findliujie.fullresshare.Media
+import com.lmxyapp.handygallery.EditItem
+import com.lmxyapp.handygallery.EditState
+import com.lmxyapp.handygallery.Edits
+import com.lmxyapp.handygallery.Media
 import androidx.compose.ui.res.stringResource
-import com.findliujie.fullresshare.Photo
-import com.findliujie.fullresshare.R
-import com.findliujie.fullresshare.FigureKind
-import com.findliujie.fullresshare.StrokeKind
-import com.findliujie.fullresshare.fitRect
+import com.lmxyapp.handygallery.Photo
+import com.lmxyapp.handygallery.R
+import com.lmxyapp.handygallery.FigureKind
+import com.lmxyapp.handygallery.StrokeKind
+import com.lmxyapp.handygallery.fitRect
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.abs

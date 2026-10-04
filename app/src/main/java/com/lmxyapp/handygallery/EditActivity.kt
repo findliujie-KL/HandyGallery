@@ -1,4 +1,4 @@
-package com.findliujie.fullresshare
+package com.lmxyapp.handygallery
 
 import android.content.Context
 import android.content.Intent
@@ -9,8 +9,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import com.findliujie.fullresshare.ui.EditorHost
-import com.findliujie.fullresshare.ui.FrsTheme
+import com.lmxyapp.handygallery.ui.EditorHost
+import com.lmxyapp.handygallery.ui.FrsTheme
 
 /** Lets other apps open an image in our editor through the standard "edit" intent. */
 class EditActivity : ComponentActivity() {

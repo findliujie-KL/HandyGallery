@@ -1,4 +1,4 @@
-package com.findliujie.fullresshare.ui
+package com.lmxyapp.handygallery.ui
 
 import android.os.Build
 import android.provider.MediaStore
@@ -27,10 +27,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import com.findliujie.fullresshare.AppLocale
-import com.findliujie.fullresshare.R
-import com.findliujie.fullresshare.Store
-import com.findliujie.fullresshare.ThemeMode
+import com.lmxyapp.handygallery.AppLocale
+import com.lmxyapp.handygallery.R
+import com.lmxyapp.handygallery.Store
+import com.lmxyapp.handygallery.ThemeMode
+import com.lmxyapp.handygallery.Trial
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -50,6 +51,15 @@ fun SettingsScreen(store: Store, onBack: () -> Unit, onLanguage: (String) -> Uni
         },
     ) { padding ->
         Column(Modifier.padding(padding).verticalScroll(rememberScrollState())) {
+            if (Trial.lastDay != null) {
+                Text(
+                    stringResource(if (Trial.expired) R.string.trial_expired else R.string.trial_until, Trial.lastDayText()),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (Trial.expired) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                )
+                HorizontalDivider()
+            }
             Section(stringResource(R.string.theme))
             val themes = listOf(
                 ThemeMode.System to R.string.theme_system,

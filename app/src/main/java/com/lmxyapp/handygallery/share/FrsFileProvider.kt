@@ -1,4 +1,4 @@
-package com.findliujie.fullresshare.share
+package com.lmxyapp.handygallery.share
 
 import android.net.Uri
 import androidx.core.content.FileProvider

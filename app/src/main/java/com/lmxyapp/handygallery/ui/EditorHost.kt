@@ -1,4 +1,4 @@
-package com.findliujie.fullresshare.ui
+package com.lmxyapp.handygallery.ui
 
 import android.app.Activity
 import android.graphics.Bitmap
@@ -19,13 +19,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import com.findliujie.fullresshare.EditState
-import com.findliujie.fullresshare.Edits
-import com.findliujie.fullresshare.Media
-import com.findliujie.fullresshare.Photo
-import com.findliujie.fullresshare.R
-import com.findliujie.fullresshare.Store
-import com.findliujie.fullresshare.share.FileSharer
+import com.lmxyapp.handygallery.EditState
+import com.lmxyapp.handygallery.Edits
+import com.lmxyapp.handygallery.Media
+import com.lmxyapp.handygallery.Photo
+import com.lmxyapp.handygallery.R
+import com.lmxyapp.handygallery.Store
+import com.lmxyapp.handygallery.share.FileSharer
 import kotlinx.coroutines.launch
 
 /**
@@ -44,6 +44,7 @@ fun EditorHost(
     onClose: () -> Unit,
     onSaved: (Uri?) -> Unit,
     onDeleted: () -> Unit,
+    startInCrop: Boolean = store.startInCrop,
 ) {
     val context = LocalContext.current
     val app = context.applicationContext
@@ -118,7 +119,7 @@ fun EditorHost(
     DarkTheme {
         EditorScreen(
             photo = photo,
-            startInCrop = store.startInCrop,
+            startInCrop = startInCrop,
             confirmExit = store.confirmExit,
             canReplace = Media.canReplace(photo) && (inMediaStore || directWrite),
             copied = copied,

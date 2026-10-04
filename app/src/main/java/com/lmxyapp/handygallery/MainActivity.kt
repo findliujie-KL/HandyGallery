@@ -1,4 +1,4 @@
-package com.findliujie.fullresshare
+package com.lmxyapp.handygallery
 
 import android.app.Activity
 import android.app.Application
@@ -34,17 +34,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.findliujie.fullresshare.share.FileSharer
-import com.findliujie.fullresshare.ui.BusyDialog
-import com.findliujie.fullresshare.ui.CollectionScreen
-import com.findliujie.fullresshare.ui.EditorHost
-import com.findliujie.fullresshare.ui.FrsTheme
-import com.findliujie.fullresshare.ui.HomeScreen
-import com.findliujie.fullresshare.ui.InfoScreen
-import com.findliujie.fullresshare.ui.PhotoActions
-import com.findliujie.fullresshare.ui.SettingsScreen
-import com.findliujie.fullresshare.ui.isDark
-import com.findliujie.fullresshare.ui.ViewerScreen
+import com.lmxyapp.handygallery.share.FileSharer
+import com.lmxyapp.handygallery.ui.BusyDialog
+import com.lmxyapp.handygallery.ui.CollectionScreen
+import com.lmxyapp.handygallery.ui.EditorHost
+import com.lmxyapp.handygallery.ui.FrsTheme
+import com.lmxyapp.handygallery.ui.HomeScreen
+import com.lmxyapp.handygallery.ui.PhotoActions
+import com.lmxyapp.handygallery.ui.SettingsScreen
+import com.lmxyapp.handygallery.ui.isDark
+import com.lmxyapp.handygallery.ui.ViewerScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -60,6 +59,12 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     /** Every non-trashed photo in the user's chosen order. */
     val sorted by derivedStateOf { photos.sortedByDescending { it.time(store.photoSort) } }
     private val screenshots by derivedStateOf { sorted.filter { it.isScreenshot } }
+
+    /** The photo wall: no screenshots (they have their own shortcut) and no folders the user has switched off. */
+    private val wall by derivedStateOf {
+        val hidden = store.wallHidden
+        sorted.filter { !it.isScreenshot && it.bucketId !in hidden }
+    }
     private val shared by derivedStateOf {
         val marks = store.marks
         photos.filter { it.id in marks }.sortedByDescending { marks[it.id]?.time }
@@ -74,7 +79,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     var afterConsent: (() -> Unit)? = null
 
     fun photosFor(source: Source): List<Photo> = when (source) {
-        Source.All -> sorted
+        Source.All -> wall
         Source.Screenshots -> screenshots
         Source.FullResShared -> shared
         Source.Favorites -> favorites
@@ -164,13 +169,13 @@ private fun App(vm: GalleryViewModel) {
     val actions = remember {
         PhotoActions(
             shareFullRes = { photos ->
-                runBusy(if (photos.size == 1) context.getString(R.string.preparing_original) else context.getString(R.string.zipping, photos.size)) {
+                if (!Trial.blocks(context)) runBusy(if (photos.size == 1) context.getString(R.string.preparing_original) else context.getString(R.string.zipping, photos.size)) {
                     FileSharer.launch(context, FileSharer.prepare(context.applicationContext, photos.map { it.uri }))
                 }
             },
             shareStock = { photos -> FileSharer.launchStock(context, photos) },
             prep = { photos ->
-                withConsent(MediaStore.createWriteRequest(resolver, photos.map { it.uri })) {
+                if (!Trial.blocks(context)) withConsent(MediaStore.createWriteRequest(resolver, photos.map { it.uri })) {
                     runBusy(context.getString(R.string.writing_marker)) {
                         val existing = vm.store.marks
                         val marks = withContext(Dispatchers.IO) {
@@ -213,7 +218,11 @@ private fun App(vm: GalleryViewModel) {
     LaunchedEffect(Unit) { if (!vm.canRead) permissionLauncher.launch(Media.permissions) }
     BackHandler(vm.stack.size > 1, vm::back)
 
-    when (val screen = vm.stack.last()) {
+    // The viewer is drawn over the screen it was opened from rather than replacing it. Swiping the
+    // photo away then reveals that screen directly, and the wall keeps its scroll position meanwhile.
+    val top = vm.stack.last()
+    val base = if (top is Screen.Viewer && vm.stack.size > 1) vm.stack[vm.stack.lastIndex - 1] else top
+    when (val screen = base) {
         Screen.Home -> HomeScreen(
             vm = vm,
             actions = actions,
@@ -236,12 +245,12 @@ private fun App(vm: GalleryViewModel) {
             },
         )
         is Screen.Collection -> CollectionScreen(vm, screen.source, actions)
-        is Screen.Viewer -> ViewerScreen(vm, screen, actions)
-        is Screen.Info -> InfoScreen(screen.photo, vm::back)
+        is Screen.Viewer -> Unit
         is Screen.Editor -> EditorHost(
             photo = screen.photo,
             store = vm.store,
             directWrite = false,
+            startInCrop = screen.crop || vm.store.startInCrop,
             onClose = vm::back,
             onSaved = {
                 vm.reload()
@@ -253,5 +262,6 @@ private fun App(vm: GalleryViewModel) {
             },
         )
     }
+    if (top is Screen.Viewer) ViewerScreen(vm, top, actions)
     vm.busy?.let { BusyDialog(it) }
 }

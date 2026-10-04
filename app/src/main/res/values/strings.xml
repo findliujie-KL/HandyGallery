@@ -7,7 +7,7 @@
     <string name="photos">Photos</string>
     <string name="folders">Folders</string>
     <string name="screenshots">Screenshots</string>
-    <string name="fullresshared">Ready</string>
+    <string name="fullresshared">Images in Front Row</string>
     <string name="favourites">Favourites</string>
     <string name="trash">Trash</string>
     <string name="settings">Settings</string>
@@ -35,6 +35,7 @@
     <string name="fsort_size">Size</string>
 
     <!-- Folders -->
+    <string name="wall_folders">Folders on photo wall</string>
     <string name="hide_folder">Hide folder</string>
     <string name="unhide_folder">Unhide folder</string>
     <string name="show_hidden">Show hidden folders</string>
@@ -45,7 +46,9 @@
     <string name="share_full_res">Share full-res img as file</string>
     <string name="share_stock">Stock Image Share</string>
     <string name="prep">Front Row</string>
-    <string name="undo_prep">Undo Prep</string>
+    <string name="undo_prep">Remove from Front Row</string>
+    <string name="front_row_again">Front Row again</string>
+    <string name="crop">Crop</string>
     <string name="edit">Edit</string>
     <string name="delete">Delete</string>
     <string name="delete_permanently">Delete permanently</string>
@@ -124,6 +127,10 @@
     <string name="keep">Keep</string>
     <string name="prep_not_found">These images aren’t in your gallery, so they can’t be prepped</string>
     <string name="cannot_open">Can’t open this image</string>
+
+    <!-- Trial builds -->
+    <string name="trial_until">Trial version. Front Row and sharing as file work until %1$s.</string>
+    <string name="trial_expired">This trial ended on %1$s. Front Row and sharing as file are no longer available.</string>
 
     <!-- Settings -->
     <string name="editor">Editor</string>

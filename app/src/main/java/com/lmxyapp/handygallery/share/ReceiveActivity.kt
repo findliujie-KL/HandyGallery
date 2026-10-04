@@ -1,4 +1,4 @@
-package com.findliujie.fullresshare.share
+package com.lmxyapp.handygallery.share
 
 import android.content.Context
 import android.content.Intent
@@ -13,11 +13,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.core.content.IntentCompat
 import androidx.lifecycle.lifecycleScope
-import com.findliujie.fullresshare.AppLocale
-import com.findliujie.fullresshare.R
-import com.findliujie.fullresshare.Store
-import com.findliujie.fullresshare.ui.BusyCard
-import com.findliujie.fullresshare.ui.FrsTheme
+import com.lmxyapp.handygallery.AppLocale
+import com.lmxyapp.handygallery.R
+import com.lmxyapp.handygallery.Store
+import com.lmxyapp.handygallery.Trial
+import com.lmxyapp.handygallery.ui.BusyCard
+import com.lmxyapp.handygallery.ui.FrsTheme
 import kotlinx.coroutines.launch
 
 /** Share target: takes images from any app and forwards them as a file (one image) or a zip (several). */
@@ -26,6 +27,10 @@ class ReceiveActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (Trial.blocks(this)) {
+            finish()
+            return
+        }
         val uris = incomingUris()
         if (uris.isEmpty()) {
             Toast.makeText(this, R.string.no_image, Toast.LENGTH_SHORT).show()

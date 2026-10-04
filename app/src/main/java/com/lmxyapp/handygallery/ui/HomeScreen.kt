@@ -1,4 +1,4 @@
-package com.findliujie.fullresshare.ui
+package com.lmxyapp.handygallery.ui
 
 import android.text.format.Formatter
 import androidx.activity.compose.BackHandler
@@ -19,15 +19,19 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items as listItems
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -55,15 +59,15 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.findliujie.fullresshare.Folder
-import com.findliujie.fullresshare.FolderSort
-import com.findliujie.fullresshare.GalleryViewModel
-import com.findliujie.fullresshare.Media
-import com.findliujie.fullresshare.Photo
-import com.findliujie.fullresshare.PhotoSort
-import com.findliujie.fullresshare.R
-import com.findliujie.fullresshare.Screen
-import com.findliujie.fullresshare.Source
+import com.lmxyapp.handygallery.Folder
+import com.lmxyapp.handygallery.FolderSort
+import com.lmxyapp.handygallery.GalleryViewModel
+import com.lmxyapp.handygallery.Media
+import com.lmxyapp.handygallery.Photo
+import com.lmxyapp.handygallery.PhotoSort
+import com.lmxyapp.handygallery.R
+import com.lmxyapp.handygallery.Screen
+import com.lmxyapp.handygallery.Source
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,7 +77,19 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
     val selecting = selection != null
     BackHandler(selecting) { selection = null }
     var showHidden by remember { mutableStateOf(false) }
+    var choosingFolders by remember { mutableStateOf(false) }
     val hidden = vm.store.hiddenFolders
+
+    if (choosingFolders) WallFolderDialog(
+        // Screenshots never appear on the wall, so their folder is not offered here.
+        folders = remember(vm.sorted) { Media.folders(vm.sorted.filter { !it.isScreenshot }, FolderSort.NameAsc) },
+        hidden = vm.store.wallHidden,
+        onDone = {
+            vm.store.chooseWallHidden(it)
+            choosingFolders = false
+        },
+        onDismiss = { choosingFolders = false },
+    )
 
     Scaffold(
         topBar = {
@@ -92,8 +108,10 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
                         fun item(label: Int, onClick: () -> Unit) =
                             DropdownMenuItem(text = { Text(stringResource(label)) }, onClick = { menu = false; onClick() })
                         item(R.string.favourites) { vm.open(Screen.Collection(Source.Favorites)) }
-                        if (vm.homeTab == 0) item(R.string.select_items) { selection = emptySet() }
-                        else if (hidden.isNotEmpty()) item(if (showHidden) R.string.stop_showing_hidden else R.string.show_hidden) {
+                        if (vm.homeTab == 0) {
+                            item(R.string.select_items) { selection = emptySet() }
+                            item(R.string.wall_folders) { choosingFolders = true }
+                        } else if (hidden.isNotEmpty()) item(if (showHidden) R.string.stop_showing_hidden else R.string.show_hidden) {
                             showHidden = !showHidden
                         }
                         item(R.string.trash) { vm.open(Screen.Collection(Source.Trash)) }
@@ -144,10 +162,14 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
                             Shortcut(Source.Screenshots, FrsIcons.Screenshot, iconFirst = true, vm.photosFor(Source.Screenshots).firstOrNull(), !selecting, vm::open)
                             Shortcut(Source.FullResShared, FrsIcons.Prep, iconFirst = false, vm.photosFor(Source.FullResShared).firstOrNull(), !selecting, vm::open)
                         }
-                        SortButton(stringResource(vm.store.photoSort.label), enumValues<PhotoSort>().map { stringResource(it.label) }) {
-                            vm.store.sortPhotos(enumValues<PhotoSort>()[it])
-                        }
                     }
+                },
+                headingAction = {
+                    SortButton(
+                        stringResource(vm.store.photoSort.label),
+                        enumValues<PhotoSort>().map { stringResource(it.label) },
+                        Modifier.padding(end = 8.dp),
+                    ) { vm.store.sortPhotos(enumValues<PhotoSort>()[it]) }
                 },
             )
             else -> FolderGrid(
@@ -175,6 +197,41 @@ private fun AppIcon(modifier: Modifier = Modifier) {
     }
 }
 
+/** Lets the user tick which folders contribute to the photo wall. [hidden] are the ones currently left off. */
+@Composable
+private fun WallFolderDialog(folders: List<Folder>, hidden: Set<Long>, onDone: (Set<Long>) -> Unit, onDismiss: () -> Unit) {
+    var off by remember { mutableStateOf(hidden) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.wall_folders)) },
+        text = {
+            LazyColumn {
+                item {
+                    val all = folders.none { it.id in off }
+                    FolderCheck(stringResource(R.string.select_all), null, all) {
+                        off = if (all) folders.map { it.id }.toSet() else emptySet()
+                    }
+                }
+                listItems(folders, key = { it.id }) { folder ->
+                    val shown = folder.id !in off
+                    FolderCheck(folder.name, folder.count, shown) { off = if (shown) off + folder.id else off - folder.id }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onDone(off) }) { Text(stringResource(R.string.done)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
+    )
+}
+
+@Composable
+private fun FolderCheck(name: String, count: Int?, checked: Boolean, onToggle: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(onClick = onToggle), verticalAlignment = Alignment.CenterVertically) {
+        Checkbox(checked = checked, onCheckedChange = { onToggle() })
+        Text(name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (count != null) Text(count.toString(), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 4.dp))
+    }
+}
+
 /** A collection's latest photo with the collection's icon beside it; the icon stands in for a text label. */
 @Composable
 private fun Shortcut(source: Source, icon: ImageVector, iconFirst: Boolean, cover: Photo?, enabled: Boolean, onOpen: (Screen) -> Unit) {
@@ -194,9 +251,14 @@ private fun Shortcut(source: Source, icon: ImageVector, iconFirst: Boolean, cove
 
 /** Right-aligned "current sort ↕" control that opens the list of choices. */
 @Composable
-private fun SortButton(current: String, options: List<String>, onPick: (Int) -> Unit) {
+private fun SortButton(
+    current: String,
+    options: List<String>,
+    modifier: Modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+    onPick: (Int) -> Unit,
+) {
     var open by remember { mutableStateOf(false) }
-    Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp), contentAlignment = Alignment.CenterEnd) {
+    Box(modifier, contentAlignment = Alignment.CenterEnd) {
         // The menu anchors to its parent, so it needs a box the size of the button, not the full-width row.
         Box {
             TextButton(onClick = { open = true }) {
@@ -238,7 +300,7 @@ private fun FolderGrid(
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
-            SortButton(sortLabel, enumValues<FolderSort>().map { stringResource(it.label) }, onSort)
+            SortButton(sortLabel, enumValues<FolderSort>().map { stringResource(it.label) }, onPick = onSort)
         }
         items(folders, key = { it.id }) { folder ->
             val isHidden = folder.id in hidden

@@ -1,4 +1,4 @@
-package com.findliujie.fullresshare
+package com.lmxyapp.handygallery
 
 import android.content.Context
 import androidx.compose.runtime.getValue
@@ -80,6 +80,18 @@ class Store private constructor(context: Context) {
         language = tag
         // Synchronous: the activity is recreated straight after and reads this in attachBaseContext.
         prefs.edit(commit = true) { putString(AppLocale.KEY, tag) }
+    }
+
+    /**
+     * Bucket ids left off the photo wall. Stored as exclusions rather than as the chosen set, so a
+     * folder that appears later (a new app's pictures, say) shows up without the user having to add it.
+     */
+    var wallHidden by mutableStateOf(prefs.getStringSet("wallHidden", emptySet())!!.mapNotNull { it.toLongOrNull() }.toSet())
+        private set
+
+    fun chooseWallHidden(ids: Set<Long>) {
+        wallHidden = ids
+        prefs.edit { putStringSet("wallHidden", ids.map { it.toString() }.toSet()) }
     }
 
     fun setFolderHidden(id: Long, hidden: Boolean) {

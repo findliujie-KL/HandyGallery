@@ -1,4 +1,4 @@
-package com.findliujie.fullresshare.ui
+package com.lmxyapp.handygallery.ui
 
 import android.util.LruCache
 import android.util.Size
@@ -20,6 +20,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -42,10 +43,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.res.stringResource
-import com.findliujie.fullresshare.Photo
-import com.findliujie.fullresshare.R
-import com.findliujie.fullresshare.Source
-import com.findliujie.fullresshare.ThemeMode
+import com.lmxyapp.handygallery.Photo
+import com.lmxyapp.handygallery.R
+import com.lmxyapp.handygallery.Source
+import com.lmxyapp.handygallery.ThemeMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -125,6 +126,30 @@ fun ShareIconButton(onFullRes: () -> Unit, onStock: () -> Unit) {
     }
 }
 
+/**
+ * Puts photos in the front row. When they are [alreadyThere] it asks which is wanted: move them to
+ * the front again, or take them out.
+ */
+@Composable
+fun FrontRowButton(alreadyThere: Boolean, onPrep: () -> Unit, onRemove: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { if (alreadyThere) open = true else onPrep() }) {
+            Icon(
+                FrsIcons.Prep,
+                contentDescription = stringResource(R.string.prep),
+                tint = if (alreadyThere) FrontRowTint else LocalContentColor.current,
+            )
+        }
+        DropdownMenu(open, { open = false }) {
+            DropdownMenuItem(text = { Text(stringResource(R.string.front_row_again)) }, onClick = { open = false; onPrep() })
+            DropdownMenuItem(text = { Text(stringResource(R.string.undo_prep)) }, onClick = { open = false; onRemove() })
+        }
+    }
+}
+
+private val FrontRowTint = Color(0xFF2BBE76)
+
 @Composable
 fun EmptyHint(text: String, modifier: Modifier = Modifier, action: @Composable () -> Unit = {}) {
     Column(
@@ -140,6 +165,10 @@ fun EmptyHint(text: String, modifier: Modifier = Modifier, action: @Composable (
 private val thumbCache = object : LruCache<String, ImageBitmap>(160 * 1024 * 1024) {
     override fun sizeOf(key: String, value: ImageBitmap) = value.width * value.height * 4
 }
+
+/** Whichever thumbnail of [photo] is already in memory, larger first: an instant stand-in while the real image loads. */
+fun cachedThumb(photo: Photo): ImageBitmap? =
+    thumbCache.get("${photo.cacheKey}@1024") ?: thumbCache.get("${photo.cacheKey}@512")
 
 @Composable
 fun Thumb(photo: Photo, modifier: Modifier = Modifier, size: Int = 512) {

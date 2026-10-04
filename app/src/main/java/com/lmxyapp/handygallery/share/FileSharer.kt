@@ -1,4 +1,4 @@
-package com.findliujie.fullresshare.share
+package com.lmxyapp.handygallery.share
 
 import android.app.Activity
 import android.content.ClipData
@@ -11,9 +11,9 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
-import com.findliujie.fullresshare.Media
-import com.findliujie.fullresshare.Photo
-import com.findliujie.fullresshare.R
+import com.lmxyapp.handygallery.Media
+import com.lmxyapp.handygallery.Photo
+import com.lmxyapp.handygallery.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File

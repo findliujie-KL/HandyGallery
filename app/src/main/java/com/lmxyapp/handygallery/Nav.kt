@@ -1,4 +1,4 @@
-package com.findliujie.fullresshare
+package com.lmxyapp.handygallery
 
 import androidx.annotation.StringRes
 
@@ -21,9 +21,9 @@ sealed interface Screen {
     data object Home : Screen
     data class Collection(val source: Source) : Screen
 
-    /** [currentId] follows the pager so returning from the editor or info page lands on the same photo. */
+    /** [currentId] follows the pager so returning from the editor lands on the same photo. */
     class Viewer(val source: Source, var currentId: Long) : Screen
-    data class Info(val photo: Photo) : Screen
-    data class Editor(val photo: Photo) : Screen
+    /** [crop] opens the editor on its crop and rotate screen regardless of the setting. */
+    data class Editor(val photo: Photo, val crop: Boolean = false) : Screen
     data object Settings : Screen
 }

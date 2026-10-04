@@ -1,4 +1,4 @@
-package com.findliujie.fullresshare.share
+package com.lmxyapp.handygallery.share
 
 import android.content.Context
 import android.content.Intent
@@ -16,15 +16,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.core.content.IntentCompat
 import androidx.lifecycle.lifecycleScope
-import com.findliujie.fullresshare.AppLocale
-import com.findliujie.fullresshare.Mark
-import com.findliujie.fullresshare.Media
-import com.findliujie.fullresshare.Photo
-import com.findliujie.fullresshare.R
-import com.findliujie.fullresshare.Store
-import com.findliujie.fullresshare.TopTagger
-import com.findliujie.fullresshare.ui.BusyCard
-import com.findliujie.fullresshare.ui.FrsTheme
+import com.lmxyapp.handygallery.AppLocale
+import com.lmxyapp.handygallery.Mark
+import com.lmxyapp.handygallery.Media
+import com.lmxyapp.handygallery.Photo
+import com.lmxyapp.handygallery.R
+import com.lmxyapp.handygallery.Store
+import com.lmxyapp.handygallery.TopTagger
+import com.lmxyapp.handygallery.Trial
+import com.lmxyapp.handygallery.ui.BusyCard
+import com.lmxyapp.handygallery.ui.FrsTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -45,6 +46,10 @@ class PrepActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (Trial.blocks(this)) {
+            finish()
+            return
+        }
         val uris = incomingUris()
         shared = uris.size
         if (uris.isEmpty()) return leave(getString(R.string.no_image))

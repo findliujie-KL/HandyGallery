@@ -1,4 +1,4 @@
-package com.findliujie.fullresshare
+package com.lmxyapp.handygallery
 
 import android.Manifest
 import android.content.ContentValues
@@ -270,7 +270,7 @@ object Media {
         val values = ContentValues().apply {
             put(MediaStore.Images.Media.DISPLAY_NAME, "${source.name.substringBeforeLast('.')}_edit_${System.currentTimeMillis()}.jpg")
             put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/FullResShare")
+            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/HandyGallery")
             put(MediaStore.Images.Media.IS_PENDING, 1)
         }
         val target = resolver.insert(MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY), values)

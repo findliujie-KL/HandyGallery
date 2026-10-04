@@ -1,4 +1,4 @@
-package com.findliujie.fullresshare.ui
+package com.lmxyapp.handygallery.ui
 
 import android.text.format.Formatter
 import androidx.activity.compose.BackHandler
@@ -25,10 +25,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import com.findliujie.fullresshare.GalleryViewModel
-import com.findliujie.fullresshare.R
-import com.findliujie.fullresshare.Screen
-import com.findliujie.fullresshare.Source
+import com.lmxyapp.handygallery.GalleryViewModel
+import com.lmxyapp.handygallery.R
+import com.lmxyapp.handygallery.Screen
+import com.lmxyapp.handygallery.Source
 
 /** One collection (a folder, Screenshots, FullResShared, Favourites or Trash) as a photo grid. */
 @OptIn(ExperimentalMaterial3Api::class)

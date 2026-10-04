@@ -1,0 +1,469 @@
+package com.lmxyapp.handygallery.ui
+
+import android.util.LruCache
+import android.util.Size
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.snapping.SnapPosition
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.lmxyapp.handygallery.GalleryViewModel
+import com.lmxyapp.handygallery.Media
+import com.lmxyapp.handygallery.Photo
+import com.lmxyapp.handygallery.R
+import com.lmxyapp.handygallery.Screen
+import com.lmxyapp.handygallery.Source
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlin.math.abs
+
+private val Scrim = Color.Black.copy(alpha = 0.55f)
+private val StarYellow = Color(0xFFFFC107)
+
+/** The last few photos decoded at screen size, so swiping back to one is instant. */
+private val screenCache = LruCache<String, ImageBitmap>(6)
+
+/**
+ * Full-screen photo. It is drawn over the screen it was opened from, so the vertical gestures can
+ * move it continuously: drag up and the details sheet rises under the photo, drag down and the photo
+ * shrinks away to reveal the wall behind it.
+ */
+@Composable
+fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActions) {
+    val photos = vm.photosFor(screen.source)
+    if (photos.isEmpty()) {
+        LaunchedEffect(Unit) { vm.back() }
+        return
+    }
+    val pager = rememberPagerState(
+        initialPage = photos.indexOfFirst { it.id == screen.currentId }.coerceAtLeast(0),
+    ) { photos.size }
+    val current = photos[pager.currentPage.coerceIn(photos.indices)]
+    LaunchedEffect(current.id) { screen.currentId = current.id }
+    var chrome by remember { mutableStateOf(true) }
+    val inTrash = screen.source == Source.Trash
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+
+    val appear = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { appear.animateTo(1f, tween(160)) }
+
+    // The empty pointerInput stops touches falling through to the screen underneath.
+    BoxWithConstraints(Modifier.fillMaxSize().pointerInput(Unit) {}) {
+        val height = constraints.maxHeight.toFloat()
+        val sheetHeight = height * 0.55f
+        /**
+         * How far the photo has been pulled, in pixels: negative while the details sheet is drawn up
+         * (down to -sheetHeight when fully open), positive while the photo is being swiped away.
+         */
+        val pull = remember { Animatable(0f) }
+        var sheetOpen by remember { mutableStateOf(false) }
+
+        fun drag(delta: Float) {
+            scope.launch { pull.snapTo((pull.value + delta).coerceIn(-sheetHeight, height)) }
+        }
+
+        fun closeSheet() {
+            scope.launch {
+                sheetOpen = false
+                pull.animateTo(0f)
+            }
+        }
+
+        /** Finishes a drag: to whichever resting place it had moved clearly towards. */
+        fun settle() {
+            val threshold = with(density) { 72.dp.toPx() }
+            val value = pull.value
+            scope.launch {
+                when {
+                    sheetOpen -> if (value > -sheetHeight + threshold) {
+                        sheetOpen = false
+                        pull.animateTo(0f)
+                    } else pull.animateTo(-sheetHeight)
+                    value < -threshold -> {
+                        sheetOpen = true
+                        pull.animateTo(-sheetHeight)
+                    }
+                    value > threshold -> {
+                        pull.animateTo(height, tween(180))
+                        vm.back()
+                    }
+                    else -> pull.animateTo(0f)
+                }
+            }
+        }
+        // Composed after the app-level handler, so while the sheet is up Back closes it instead of leaving.
+        BackHandler(sheetOpen, ::closeSheet)
+
+        /** 0 at rest, 1 once the photo has been dragged far enough down to be clearly leaving. */
+        fun away() = (pull.value / (height * 0.4f)).coerceIn(0f, 1f)
+
+        Box(Modifier.fillMaxSize().graphicsLayer { alpha = appear.value }) {
+            Box(Modifier.fillMaxSize().graphicsLayer { alpha = 1f - away() }.background(Color.Black))
+            HorizontalPager(
+                pager,
+                key = { photos[it].id },
+                beyondViewportPageCount = 1,
+                modifier = Modifier.graphicsLayer {
+                    // Going down the photo follows the finger and shrinks; going up it rises at half
+                    // speed so it stays in view above the sheet.
+                    val value = pull.value
+                    translationY = if (value > 0f) value else value * 0.5f
+                    val shrink = 1f - 0.25f * away()
+                    scaleX = shrink
+                    scaleY = shrink
+                },
+            ) { page ->
+                ZoomableImage(
+                    photos[page],
+                    onTap = { if (sheetOpen) closeSheet() else chrome = !chrome },
+                    onVerticalDrag = ::drag,
+                    onVerticalDragEnd = ::settle,
+                )
+            }
+
+            if (chrome && pull.value == 0f) CompositionLocalProvider(LocalContentColor provides Color.White) {
+                Row(
+                    Modifier.align(Alignment.TopCenter).fillMaxWidth().background(Scrim).statusBarsPadding().padding(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = vm::back) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
+                    }
+                    Box(Modifier.weight(1f))
+                    if (!inTrash) {
+                        val favorite = current.id in vm.store.favorites
+                        IconButton(onClick = { actions.setFavorite(listOf(current), !favorite) }) {
+                            if (favorite) Icon(Icons.Filled.Star, contentDescription = stringResource(R.string.unfavourite), tint = StarYellow)
+                            else Icon(FrsIcons.StarBorder, contentDescription = stringResource(R.string.favourite))
+                        }
+                        FrontRowButton(
+                            alreadyThere = current.id in vm.store.marks,
+                            onPrep = { actions.prep(listOf(current)) },
+                            onRemove = { actions.unprep(listOf(current)) },
+                        )
+                    }
+                    var menu by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { menu = true }) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.more_options))
+                        }
+                        DropdownMenu(menu, { menu = false }) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.info)) },
+                                onClick = {
+                                    menu = false
+                                    sheetOpen = true
+                                    scope.launch { pull.animateTo(-sheetHeight) }
+                                },
+                            )
+                        }
+                    }
+                }
+                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Scrim).navigationBarsPadding()) {
+                    FilmStrip(photos, pager)
+                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                        if (inTrash) {
+                            BarAction(Icons.Filled.Refresh, stringResource(R.string.restore)) { actions.restore(listOf(current)) }
+                            BarAction(Icons.Filled.Delete, stringResource(R.string.delete)) { actions.delete(listOf(current)) }
+                        } else {
+                            var share by remember { mutableStateOf(false) }
+                            Box(Modifier.weight(1f)) {
+                                Row { BarAction(Icons.Filled.Share, stringResource(R.string.share)) { share = true } }
+                                ShareMenu(
+                                    share, { share = false },
+                                    onFullRes = { actions.shareFullRes(listOf(current)) },
+                                    onStock = { actions.shareStock(listOf(current)) },
+                                )
+                            }
+                            BarAction(FrsIcons.Crop, stringResource(R.string.crop)) { vm.open(Screen.Editor(current, crop = true)) }
+                            BarAction(Icons.Filled.Edit, stringResource(R.string.edit)) { vm.open(Screen.Editor(current)) }
+                            BarAction(Icons.Filled.Delete, stringResource(R.string.trash)) { actions.trash(listOf(current)) }
+                        }
+                    }
+                }
+            }
+
+            // Details sheet: parked just below the screen and drawn up by a negative pull.
+            if (pull.value < 0f) Surface(
+                shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(with(density) { sheetHeight.toDp() })
+                    .graphicsLayer { translationY = sheetHeight + pull.value }
+                    .pointerInput(Unit) {
+                        detectVerticalDragGestures(onDragEnd = { settle() }, onDragCancel = { settle() }) { _, delta -> drag(delta) }
+                    },
+            ) {
+                InfoContent(current, Modifier.navigationBarsPadding())
+            }
+        }
+    }
+}
+
+/**
+ * A row of small thumbnails with the current photo in the middle. It follows the pager, and
+ * scrolling or tapping it moves the pager, the way Samsung Gallery's strip does.
+ */
+@Composable
+private fun FilmStrip(photos: List<Photo>, pager: PagerState) {
+    val strip = rememberLazyListState(initialFirstVisibleItemIndex = pager.currentPage)
+    val scope = rememberCoroutineScope()
+    val itemWidth = 40.dp
+    val gap = 2.dp
+    val step = with(LocalDensity.current) { (itemWidth + gap).toPx() }
+
+    // Only a scroll the user started may drive the pager; otherwise the strip's own catch-up animation
+    // would feed back into the pager it is following.
+    val dragged by strip.interactionSource.collectIsDraggedAsState()
+    var userDriven by remember { mutableStateOf(false) }
+    LaunchedEffect(dragged) { if (dragged) userDriven = true }
+    LaunchedEffect(strip.isScrollInProgress) { if (!strip.isScrollInProgress) userDriven = false }
+
+    LaunchedEffect(pager.currentPage) { if (!userDriven) strip.animateScrollToItem(pager.currentPage) }
+    val count by rememberUpdatedState(photos.size)
+    LaunchedEffect(strip, pager) {
+        snapshotFlow {
+            if (!userDriven) -1 else strip.firstVisibleItemIndex + if (strip.firstVisibleItemScrollOffset > step / 2) 1 else 0
+        }.collect { index -> if (index in 0 until count && index != pager.currentPage) pager.scrollToPage(index) }
+    }
+
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 2.dp)) {
+        LazyRow(
+            state = strip,
+            // Padding of half the width lets the first and last thumbnails reach the middle.
+            contentPadding = PaddingValues(horizontal = (maxWidth - itemWidth) / 2),
+            horizontalArrangement = Arrangement.spacedBy(gap),
+            flingBehavior = rememberSnapFlingBehavior(strip, SnapPosition.Center),
+        ) {
+            items(photos.size, key = { photos[it].id }) { i ->
+                val shape = RoundedCornerShape(4.dp)
+                Thumb(
+                    photos[i],
+                    Modifier
+                        .size(itemWidth, 52.dp)
+                        .clip(shape)
+                        .then(if (i == pager.currentPage) Modifier.border(2.dp, Color.White, shape) else Modifier)
+                        .clickable { scope.launch { pager.animateScrollToPage(i) } },
+                )
+            }
+        }
+    }
+}
+
+/** Icon above label, each taking an equal share of the bar; long labels wrap onto further lines. */
+@Composable
+private fun RowScope.BarAction(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Column(
+        Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(vertical = 8.dp, horizontal = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(icon, contentDescription = null)
+        Text(label, fontSize = 12.sp, lineHeight = 14.sp, textAlign = TextAlign.Center, maxLines = 3, modifier = Modifier.padding(top = 4.dp))
+    }
+}
+
+/**
+ * One photo: pinch or double-tap to zoom. At normal size a vertical drag is reported through
+ * [onVerticalDrag] (pixels moved) and [onVerticalDragEnd], for the viewer to turn into the details
+ * sheet or a dismissal. Sideways swipes are left to the pager.
+ */
+@Composable
+private fun ZoomableImage(photo: Photo, onTap: () -> Unit, onVerticalDrag: (Float) -> Unit, onVerticalDragEnd: () -> Unit) {
+    val context = LocalContext.current
+    val key = photo.cacheKey
+    val configuration = LocalConfiguration.current
+    // Twice the screen's short side: sharp when fitted and up to 2x zoom, without decoding every pixel
+    // of a large photo just to show it at screen size.
+    val screenEdge = with(LocalDensity.current) { minOf(configuration.screenWidthDp, configuration.screenHeightDp).dp.toPx() }.toInt() * 2
+
+    // Three stages, each replacing the last: the wall's thumbnail (usually already in memory, so the
+    // photo appears at once), a screen-sized decode, and the full image only if the user zooms in.
+    var placeholder by remember(key) { mutableStateOf(cachedThumb(photo)) }
+    LaunchedEffect(key) {
+        if (placeholder == null) placeholder = withContext(Dispatchers.IO) {
+            runCatching { context.contentResolver.loadThumbnail(photo.uri, Size(512, 512), null).asImageBitmap() }.getOrNull()
+        }
+    }
+    val fitted by produceState(screenCache.get(key), key) {
+        if (value == null) value = withContext(Dispatchers.IO) {
+            runCatching { Media.decode(context, photo.uri, maxEdge = screenEdge).asImageBitmap() }.getOrNull()
+        }?.also { screenCache.put(key, it) }
+    }
+    var scale by remember { mutableFloatStateOf(1f) }
+    var detail by remember(key) { mutableStateOf<ImageBitmap?>(null) }
+    val wantsDetail = scale > 2f && maxOf(photo.width, photo.height) > screenEdge
+    LaunchedEffect(key, wantsDetail) {
+        if (wantsDetail && detail == null) detail = withContext(Dispatchers.IO) {
+            runCatching { Media.decode(context, photo.uri, maxEdge = 6000, maxPixels = 40_000_000).asImageBitmap() }.getOrNull()
+        }
+    }
+    val bitmap = detail ?: fitted ?: placeholder
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    val scope = rememberCoroutineScope()
+    /** The double-tap zoom animation in flight, so a second double-tap or a pinch can take over from it. */
+    var zooming by remember { mutableStateOf<Job?>(null) }
+    val tap by rememberUpdatedState(onTap)
+    val verticalDrag by rememberUpdatedState(onVerticalDrag)
+    val verticalDragEnd by rememberUpdatedState(onVerticalDragEnd)
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    var travelled = Offset.Zero
+                    // Decided once the finger has clearly moved: null until then.
+                    var vertical: Boolean? = null
+                    do {
+                        val event = awaitPointerEvent()
+                        if (event.changes.size > 1 || scale > 1f) {
+                            // Zooming or zoomed: this handler owns the gesture.
+                            zooming?.cancel()
+                            if (vertical == true) verticalDragEnd()
+                            vertical = false
+                            scale = (scale * event.calculateZoom()).coerceIn(1f, 8f)
+                            val maxX = size.width * (scale - 1) / 2
+                            val maxY = size.height * (scale - 1) / 2
+                            val moved = offset + event.calculatePan()
+                            offset = Offset(moved.x.coerceIn(-maxX, maxX), moved.y.coerceIn(-maxY, maxY))
+                            event.changes.forEach { if (it.positionChanged()) it.consume() }
+                        } else {
+                            val change = event.changes[0]
+                            val step = change.positionChange()
+                            travelled += step
+                            if (vertical == null && travelled.getDistance() > viewConfiguration.touchSlop) {
+                                vertical = abs(travelled.y) > abs(travelled.x)
+                            }
+                            if (vertical == true) {
+                                verticalDrag(step.y)
+                                change.consume()
+                            }
+                        }
+                    } while (event.changes.any { it.pressed })
+                    if (vertical == true) verticalDragEnd()
+                }
+            }
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { tap() },
+                    onDoubleTap = { tapped ->
+                        val fromScale = scale
+                        val fromOffset = offset
+                        val toScale = if (fromScale > 1f) 1f else 2.5f
+                        // Zooming in keeps the tapped point under the finger, as far as the edges allow.
+                        val centre = Offset(size.width / 2f, size.height / 2f)
+                        val maxX = size.width * (toScale - 1) / 2
+                        val maxY = size.height * (toScale - 1) / 2
+                        val wanted = (centre - tapped) * (toScale - 1)
+                        val toOffset = Offset(wanted.x.coerceIn(-maxX, maxX), wanted.y.coerceIn(-maxY, maxY))
+                        zooming?.cancel()
+                        zooming = scope.launch {
+                            animate(0f, 1f, animationSpec = tween(240, easing = FastOutSlowInEasing)) { t, _ ->
+                                scale = fromScale + (toScale - fromScale) * t
+                                offset = fromOffset + (toOffset - fromOffset) * t
+                            }
+                        }
+                    },
+                )
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        val loaded = bitmap
+        if (loaded == null) CircularProgressIndicator(color = Color.White)
+        else Image(
+            loaded,
+            contentDescription = photo.name,
+            modifier = Modifier.fillMaxSize().graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                translationX = offset.x
+                translationY = offset.y
+            },
+        )
+    }
+}

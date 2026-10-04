@@ -6,7 +6,7 @@
     <string name="photos">照片</string>
     <string name="folders">文件夹</string>
     <string name="screenshots">截图</string>
-    <string name="fullresshared">分享就绪</string>
+    <string name="fullresshared">已在分享区置顶</string>
     <string name="favourites">收藏</string>
     <string name="trash">回收站</string>
     <string name="settings">设置</string>
@@ -29,6 +29,7 @@
     <string name="fsort_name_desc">名称 (Z–A)</string>
     <string name="fsort_size">大小</string>
 
+    <string name="wall_folders">照片墙显示的文件夹</string>
     <string name="hide_folder">隐藏文件夹</string>
     <string name="unhide_folder">取消隐藏</string>
     <string name="show_hidden">显示已隐藏的文件夹</string>
@@ -39,6 +40,8 @@
     <string name="share_stock">普通图片分享</string>
     <string name="prep">分享候选区置顶</string>
     <string name="undo_prep">撤销置顶</string>
+    <string name="front_row_again">再次置顶</string>
+    <string name="crop">裁剪</string>
     <string name="edit">编辑</string>
     <string name="delete">删除</string>
     <string name="delete_permanently">永久删除</string>
@@ -118,6 +121,8 @@
     <string name="start_in_crop_desc">每次编辑都从裁剪和旋转界面开始。</string>
     <string name="confirm_exit">退出前询问是否保存</string>
     <string name="confirm_exit_desc">有未保存的修改时，退出编辑器前先询问是否保存。</string>
+    <string name="trial_until">试用版。分享候选区置顶和原图分享可使用至 %1$s。</string>
+    <string name="trial_expired">试用已于 %1$s 结束，分享候选区置顶和原图分享已停用。</string>
     <string name="theme">主题</string>
     <string name="theme_system">跟随系统</string>
     <string name="theme_light">浅色</string>
