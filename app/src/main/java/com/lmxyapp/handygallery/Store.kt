@@ -94,6 +94,15 @@ class Store private constructor(context: Context) {
         prefs.edit { putStringSet("wallHidden", ids.map { it.toString() }.toSet()) }
     }
 
+    /** Whether each month on the photo wall is split into a subsection per folder. */
+    var wallByFolder by mutableStateOf(prefs.getBoolean("wallByFolder", false))
+        private set
+
+    fun chooseWallByFolder(on: Boolean) {
+        wallByFolder = on
+        prefs.edit { putBoolean("wallByFolder", on) }
+    }
+
     fun setFolderHidden(id: Long, hidden: Boolean) {
         hiddenFolders = if (hidden) hiddenFolders + id else hiddenFolders - id
         prefs.edit { putStringSet("hiddenFolders", hiddenFolders.map { it.toString() }.toSet()) }

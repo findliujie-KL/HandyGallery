@@ -63,11 +63,19 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     val sorted by derivedStateOf { photos.sortedByDescending { it.time(store.photoSort) } }
     private val screenshots by derivedStateOf { sorted.filter { it.isScreenshot } }
 
-    /** The photo wall: no screenshots (they have their own shortcut) and no folders the user has switched off. */
+    /**
+     * The photo wall: no screenshots (they have their own shortcut) and no folders the user has switched off.
+     * When months are split by folder the list is in that order too, so swiping in the viewer and
+     * drag-selecting follow what the wall shows.
+     */
     private val wall by derivedStateOf {
         val hidden = store.wallHidden
-        sorted.filter { !it.isScreenshot && it.bucketId !in hidden }
+        val shown = sorted.filter { !it.isScreenshot && it.bucketId !in hidden }
+        if (store.wallByFolder) Media.byMonthAndFolder(shown, store.photoSort) else shown
     }
+    /** The folders offered when choosing what the wall shows. Screenshots never appear there, so theirs is left out. */
+    val wallFolders by derivedStateOf { Media.folders(sorted.filter { !it.isScreenshot }, FolderSort.NameAsc) }
+
     private val shared by derivedStateOf {
         val marks = store.marks
         photos.filter { it.id in marks }.sortedByDescending { marks[it.id]?.time }
@@ -236,6 +244,7 @@ private fun App(vm: GalleryViewModel) {
             )
             Screen.Settings -> SettingsScreen(
                 store = vm.store,
+                wallFolders = vm.wallFolders,
                 onBack = vm::back,
                 onLanguage = { tag ->
                     vm.store.chooseLanguage(tag)

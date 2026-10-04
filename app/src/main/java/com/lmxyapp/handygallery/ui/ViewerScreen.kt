@@ -94,6 +94,7 @@ import com.lmxyapp.handygallery.Photo
 import com.lmxyapp.handygallery.R
 import com.lmxyapp.handygallery.Screen
 import com.lmxyapp.handygallery.Source
+import com.lmxyapp.handygallery.share.FileSharer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -127,6 +128,9 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
     val inTrash = screen.source == Source.Trash
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
+    val context = LocalContext.current
+    /** The full details page, opened from the menu; swiping up gives the short sheet instead. */
+    var details by remember { mutableStateOf(false) }
 
     val appear = remember { Animatable(0f) }
     LaunchedEffect(Unit) { appear.animateTo(1f, tween(160)) }
@@ -250,11 +254,10 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
                         }
                         DropdownMenu(menu, { menu = false }) {
                             DropdownMenuItem(
-                                text = { Text(stringResource(R.string.info)) },
+                                text = { Text(stringResource(R.string.details)) },
                                 onClick = {
                                     menu = false
-                                    sheetOpen = true
-                                    scope.launch { pull.animateTo(-sheetHeight) }
+                                    details = true
                                 },
                             )
                         }
@@ -274,6 +277,7 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
                                     share, { share = false },
                                     onFullRes = { actions.shareFullRes(listOf(current)) },
                                     onStock = { actions.shareStock(listOf(current)) },
+                                    onEditElsewhere = { FileSharer.editElsewhere(context, current) },
                                 )
                             }
                             BarAction(FrsIcons.Crop, stringResource(R.string.crop)) { vm.open(Screen.Editor(current, crop = true)) }
@@ -299,6 +303,9 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
                 InfoContent(current, Modifier.navigationBarsPadding())
             }
         }
+
+        // Composed last, so it covers the viewer and its Back handler comes before the ones above.
+        if (details) DetailsPage(current, vm.store.marks[current.id]?.time) { details = false }
     }
 }
 

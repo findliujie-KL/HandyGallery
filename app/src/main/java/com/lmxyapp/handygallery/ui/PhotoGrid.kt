@@ -67,6 +67,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.lmxyapp.handygallery.Photo
@@ -102,14 +103,25 @@ private const val Units = 60
 private val Gap = 2.dp
 
 private sealed interface GridRow {
-    data class Header(val key: String, val label: String) : GridRow
+    /** [sub] marks a folder heading inside a month. */
+    data class Header(val key: String, val label: String, val sub: Boolean = false) : GridRow
 
     /** [height] null means a square cell. */
     data class Cell(val photo: Photo, val span: Int = 1, val height: Dp? = null) : GridRow
 }
 
-/** Splits [photos] into month groups by [sort]; null means one unlabelled group. */
-private fun buildRows(photos: List<Photo>, sort: PhotoSort?, wall: Wall, width: Dp, monthLabel: (YearMonth) -> String): List<GridRow> {
+/**
+ * Splits [photos] into month groups by [sort]; null means one unlabelled group. With [byFolder] each
+ * month is split again wherever the folder changes, which expects a month's photos to arrive folder by folder.
+ */
+private fun buildRows(
+    photos: List<Photo>,
+    sort: PhotoSort?,
+    byFolder: Boolean,
+    wall: Wall,
+    width: Dp,
+    monthLabel: (YearMonth) -> String,
+): List<GridRow> {
     val rows = ArrayList<GridRow>(photos.size + 24)
     fun addGroup(group: List<Photo>) {
         if (wall is Wall.Justified) justify(group, wall.rowHeight, width, rows) else group.mapTo(rows) { GridRow.Cell(it) }
@@ -120,14 +132,18 @@ private fun buildRows(photos: List<Photo>, sort: PhotoSort?, wall: Wall, width: 
     }
     val zone = ZoneId.systemDefault()
     var last: YearMonth? = null
+    var lastBucket = 0L
     var group = ArrayList<Photo>()
     for (photo in photos) {
         val month = YearMonth.from(Instant.ofEpochMilli(photo.time(sort)).atZone(zone))
-        if (month != last) {
+        val newMonth = month != last
+        if (newMonth || (byFolder && photo.bucketId != lastBucket)) {
             addGroup(group)
             group = ArrayList()
+            if (newMonth) rows += GridRow.Header("h$month", monthLabel(month))
+            if (byFolder) rows += GridRow.Header("h$month/${photo.bucketId}", photo.bucketName, sub = true)
             last = month
-            rows += GridRow.Header("h$month", monthLabel(month))
+            lastBucket = photo.bucketId
         }
         group += photo
     }
@@ -179,6 +195,8 @@ private fun justify(group: List<Photo>, target: Dp, width: Dp, out: MutableList<
  * fingers and fades out while the next one fades in around the same photo, then it settles on release.
  *
  * [header] scrolls above the photos; [headingAction] sits at the right of the first month heading.
+ * [byFolder] adds a folder heading wherever the folder changes within a month; [photos] must then be
+ * ordered that way (see Media.byMonthAndFolder).
  *
  * [selection] null means not in selection mode. Don't give this top content padding: drag hit-testing
  * assumes item offsets start at the grid's own origin.
@@ -196,6 +214,7 @@ fun PhotoGrid(
     bottomPadding: PaddingValues = PaddingValues(),
     header: (@Composable () -> Unit)? = null,
     headingAction: (@Composable () -> Unit)? = null,
+    byFolder: Boolean = false,
 ) = BoxWithConstraints(modifier.clipToBounds()) {
     val density = LocalDensity.current
     val widthPx = constraints.maxWidth.toFloat()
@@ -205,10 +224,10 @@ fun PhotoGrid(
     val otherYearFormat = DateTimeFormatter.ofPattern(stringResource(R.string.month_other_year), locale)
 
     val width = maxWidth
-    val rowsCache = remember(photos, sort, width, locale) { HashMap<Int, List<GridRow>>() }
+    val rowsCache = remember(photos, sort, byFolder, width, locale) { HashMap<Int, List<GridRow>>() }
     fun rowsFor(level: Int) = rowsCache.getOrPut(level) {
         val thisYear = Year.now().value
-        buildRows(photos, sort, walls[level], width) { (if (it.year == thisYear) thisYearFormat else otherYearFormat).format(it) }
+        buildRows(photos, sort, byFolder, walls[level], width) { (if (it.year == thisYear) thisYearFormat else otherYearFormat).format(it) }
     }
 
     /** How big a cell is at [level], used as the scale between two levels. */
@@ -454,7 +473,14 @@ private fun WallLayer(
             contentType = { if (rows[it] is GridRow.Header) "header" else "cell" },
         ) { i ->
             when (val row = rows[i]) {
-                is GridRow.Header -> Row(verticalAlignment = Alignment.CenterVertically) {
+                is GridRow.Header -> if (row.sub) Text(
+                    row.label,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 6.dp),
+                ) else Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         row.label,
                         style = MaterialTheme.typography.titleLarge,

@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items as listItems
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
@@ -52,6 +53,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -81,8 +86,7 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
     val hidden = vm.store.hiddenFolders
 
     if (choosingFolders) WallFolderDialog(
-        // Screenshots never appear on the wall, so their folder is not offered here.
-        folders = remember(vm.sorted) { Media.folders(vm.sorted.filter { !it.isScreenshot }, FolderSort.NameAsc) },
+        folders = vm.wallFolders,
         hidden = vm.store.wallHidden,
         onDone = {
             vm.store.chooseWallHidden(it)
@@ -111,6 +115,9 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
                         if (vm.homeTab == 0) {
                             item(R.string.select_items) { selection = emptySet() }
                             item(R.string.wall_folders) { choosingFolders = true }
+                            item(if (vm.store.wallByFolder) R.string.stop_group_by_folder else R.string.group_by_folder) {
+                                vm.store.chooseWallByFolder(!vm.store.wallByFolder)
+                            }
                         } else if (hidden.isNotEmpty()) item(if (showHidden) R.string.stop_showing_hidden else R.string.show_hidden) {
                             showHidden = !showHidden
                         }
@@ -149,6 +156,7 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
                 onOpen = { vm.open(Screen.Viewer(Source.All, it.id)) },
                 zoom = vm.store.gridZoom,
                 onZoom = vm.store::zoomGrid,
+                byFolder = vm.store.wallByFolder,
                 modifier = Modifier.padding(top = padding.calculateTopPadding()),
                 bottomPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
                 header = {
@@ -177,10 +185,14 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
                     Media.folders(vm.sorted, vm.store.folderSort).filter { showHidden || it.id !in hidden }
                 },
                 hidden = hidden,
+                offWall = vm.store.wallHidden,
                 sortLabel = stringResource(vm.store.folderSort.label),
                 onSort = { vm.store.sortFolders(enumValues<FolderSort>()[it]) },
                 onOpen = { vm.open(Screen.Collection(Source.Folder(it.id, it.name))) },
                 onHide = { folder, hide -> vm.store.setFolderHidden(folder.id, hide) },
+                onWall = { folder, show ->
+                    vm.store.chooseWallHidden(if (show) vm.store.wallHidden - folder.id else vm.store.wallHidden + folder.id)
+                },
                 padding = padding,
             )
         }
@@ -199,7 +211,7 @@ private fun AppIcon(modifier: Modifier = Modifier) {
 
 /** Lets the user tick which folders contribute to the photo wall. [hidden] are the ones currently left off. */
 @Composable
-private fun WallFolderDialog(folders: List<Folder>, hidden: Set<Long>, onDone: (Set<Long>) -> Unit, onDismiss: () -> Unit) {
+fun WallFolderDialog(folders: List<Folder>, hidden: Set<Long>, onDone: (Set<Long>) -> Unit, onDismiss: () -> Unit) {
     var off by remember { mutableStateOf(hidden) }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -274,16 +286,21 @@ private fun SortButton(
     }
 }
 
-/** Folder cards. Long-pressing one offers to hide it, or to unhide it when hidden ones are being shown. */
+/**
+ * Folder cards. Long-pressing one offers to hide it (or unhide it when hidden ones are being shown) and
+ * to take it off the photo wall or put it back. Folders in [offWall] carry a badge on their cover.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FolderGrid(
     folders: List<Folder>,
     hidden: Set<Long>,
+    offWall: Set<Long>,
     sortLabel: String,
     onSort: (Int) -> Unit,
     onOpen: (Folder) -> Unit,
     onHide: (Folder, Boolean) -> Unit,
+    onWall: (Folder, Boolean) -> Unit,
     padding: PaddingValues,
 ) {
     val context = LocalContext.current
@@ -304,6 +321,9 @@ private fun FolderGrid(
         }
         items(folders, key = { it.id }) { folder ->
             val isHidden = folder.id in hidden
+            // Screenshots are never on the wall, whatever the user picks, so that folder gets no choice.
+            val screenshots = folder.cover.isScreenshot
+            val onWallNow = !screenshots && folder.id !in offWall
             var menu by remember { mutableStateOf(false) }
             Column(
                 Modifier
@@ -311,7 +331,10 @@ private fun FolderGrid(
                     .combinedClickable(onClick = { onOpen(folder) }, onLongClick = { menu = true })
                     .alpha(if (isHidden) 0.45f else 1f),
             ) {
-                Thumb(folder.cover, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(20.dp)))
+                Box {
+                    Thumb(folder.cover, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(20.dp)))
+                    if (!onWallNow) OffWallBadge(Modifier.align(Alignment.TopEnd).padding(8.dp))
+                }
                 Text(
                     folder.name,
                     style = MaterialTheme.typography.titleMedium,
@@ -330,8 +353,31 @@ private fun FolderGrid(
                         text = { Text(stringResource(if (isHidden) R.string.unhide_folder else R.string.hide_folder)) },
                         onClick = { menu = false; onHide(folder, !isHidden) },
                     )
+                    if (!screenshots) DropdownMenuItem(
+                        text = { Text(stringResource(if (onWallNow) R.string.wall_hide else R.string.wall_show)) },
+                        onClick = { menu = false; onWall(folder, !onWallNow) },
+                    )
                 }
             }
         }
+    }
+}
+
+/** The photo-wall icon struck through, on a dark disc so it reads over any cover. */
+@Composable
+private fun OffWallBadge(modifier: Modifier = Modifier) {
+    Box(modifier.size(30.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f)), contentAlignment = Alignment.Center) {
+        Icon(
+            FrsIcons.Image,
+            contentDescription = stringResource(R.string.not_on_wall),
+            tint = Color.White,
+            modifier = Modifier.size(18.dp).drawWithContent {
+                drawContent()
+                val inset = 1.dp.toPx()
+                // A dark line under the white one keeps the stroke visible where it crosses the icon.
+                drawLine(Color.Black, Offset(inset, inset), Offset(size.width - inset, size.height - inset), 4.5.dp.toPx(), StrokeCap.Round)
+                drawLine(Color.White, Offset(inset, inset), Offset(size.width - inset, size.height - inset), 2.dp.toPx(), StrokeCap.Round)
+            },
+        )
     }
 }

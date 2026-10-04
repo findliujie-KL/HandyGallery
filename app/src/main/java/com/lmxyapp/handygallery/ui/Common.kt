@@ -108,12 +108,24 @@ fun BusyDialog(message: String) {
     }
 }
 
-/** The two ways to share, offered wherever there is a Share action. */
+/**
+ * The two ways to share, offered wherever there is a Share action. Where a single photo is on show,
+ * [onEditElsewhere] adds handing it to another editor.
+ */
 @Composable
-fun ShareMenu(expanded: Boolean, onDismiss: () -> Unit, onFullRes: () -> Unit, onStock: () -> Unit) {
+fun ShareMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    onFullRes: () -> Unit,
+    onStock: () -> Unit,
+    onEditElsewhere: (() -> Unit)? = null,
+) {
     DropdownMenu(expanded, onDismiss) {
         DropdownMenuItem(text = { Text(stringResource(R.string.share_full_res)) }, onClick = { onDismiss(); onFullRes() })
         DropdownMenuItem(text = { Text(stringResource(R.string.share_stock)) }, onClick = { onDismiss(); onStock() })
+        if (onEditElsewhere != null) {
+            DropdownMenuItem(text = { Text(stringResource(R.string.edit_elsewhere)) }, onClick = { onDismiss(); onEditElsewhere() })
+        }
     }
 }
 

@@ -11,6 +11,7 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
+import com.lmxyapp.handygallery.EditActivity
 import com.lmxyapp.handygallery.Media
 import com.lmxyapp.handygallery.Photo
 import com.lmxyapp.handygallery.R
@@ -94,6 +95,22 @@ object FileSharer {
         }
         send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         startChooser(context, send, context.getString(R.string.share_stock))
+    }
+
+    /** Offers the other photo editors on the device; ours is left out since the Edit button already opens it. */
+    fun editElsewhere(context: Context, photo: Photo) {
+        val edit = Intent(Intent.ACTION_EDIT).apply {
+            setDataAndType(photo.uri, photo.mime)
+            clipData = ClipData(photo.name, arrayOf(photo.mime), ClipData.Item(photo.uri))
+            // Read only: write access to a photo another app created is not ours to pass on, and asking
+            // for it makes the launch fail. Editors save their result as a new photo instead.
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val chooser = Intent.createChooser(edit, context.getString(R.string.edit_elsewhere)).apply {
+            putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, arrayOf(ComponentName(context, EditActivity::class.java)))
+            if (context !is Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(chooser)
     }
 
     private fun startChooser(context: Context, send: Intent, title: String) {

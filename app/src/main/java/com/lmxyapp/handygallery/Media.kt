@@ -16,6 +16,9 @@ import androidx.exifinterface.media.ExifInterface
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.InputStream
+import java.time.Instant
+import java.time.YearMonth
+import java.time.ZoneId
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -143,6 +146,31 @@ object Media {
             }
         }
         out
+    }
+
+    /**
+     * Reorders [photos] (already newest first by [sort]) so that within each month a folder's photos sit
+     * together. Folders come in the order of their newest photo that month, and keep time order inside.
+     */
+    fun byMonthAndFolder(photos: List<Photo>, sort: PhotoSort): List<Photo> {
+        val zone = ZoneId.systemDefault()
+        val out = ArrayList<Photo>(photos.size)
+        var last: YearMonth? = null
+        val buckets = LinkedHashMap<Long, MutableList<Photo>>()
+        fun flush() {
+            buckets.values.forEach(out::addAll)
+            buckets.clear()
+        }
+        for (photo in photos) {
+            val month = YearMonth.from(Instant.ofEpochMilli(photo.time(sort)).atZone(zone))
+            if (month != last) {
+                flush()
+                last = month
+            }
+            buckets.getOrPut(photo.bucketId) { ArrayList() } += photo
+        }
+        flush()
+        return out
     }
 
     fun folders(photos: List<Photo>, sort: FolderSort): List<Folder> {

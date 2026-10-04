@@ -30,14 +30,20 @@
     <string name="fsort_size">大小</string>
 
     <string name="wall_folders">照片墙显示的文件夹</string>
+    <string name="wall_hide">不在照片墙显示</string>
+    <string name="wall_show">在照片墙显示</string>
+    <string name="not_on_wall">未在照片墙显示</string>
     <string name="hide_folder">隐藏文件夹</string>
     <string name="unhide_folder">取消隐藏</string>
+    <string name="group_by_folder">每月按文件夹分组</string>
+    <string name="stop_group_by_folder">取消按文件夹分组</string>
     <string name="show_hidden">显示已隐藏的文件夹</string>
     <string name="stop_showing_hidden">不再显示已隐藏的文件夹</string>
 
     <string name="share">分享</string>
     <string name="share_full_res">原图分享</string>
     <string name="share_stock">普通图片分享</string>
+    <string name="edit_elsewhere">用其他应用编辑</string>
     <string name="prep">分享候选区置顶</string>
     <string name="undo_prep">撤销置顶</string>
     <string name="front_row_again">再次置顶</string>
@@ -88,6 +94,35 @@
     <string name="release_to_delete">松手删除</string>
 
     <string name="camera">相机</string>
+    <string name="details">详细信息</string>
+    <string name="details_file">文件</string>
+    <string name="d_name">名称</string>
+    <string name="d_folder">文件夹</string>
+    <string name="d_path">路径</string>
+    <string name="d_type">类型</string>
+    <string name="d_size">大小</string>
+    <string name="d_dimensions">尺寸</string>
+    <string name="details_dates">日期</string>
+    <string name="d_make">品牌</string>
+    <string name="d_model">型号</string>
+    <string name="d_lens">镜头</string>
+    <string name="d_software">软件</string>
+    <string name="details_shooting">拍摄参数</string>
+    <string name="d_aperture">光圈</string>
+    <string name="d_shutter">快门速度</string>
+    <string name="d_iso">ISO</string>
+    <string name="d_focal">焦距</string>
+    <string name="d_focal35">等效 35mm 焦距</string>
+    <string name="d_bias">曝光补偿</string>
+    <string name="d_flash">闪光灯</string>
+    <string name="flash_fired">已闪光</string>
+    <string name="flash_off">未闪光</string>
+    <string name="d_white_balance">白平衡</string>
+    <string name="wb_auto">自动</string>
+    <string name="wb_manual">手动</string>
+    <string name="details_location">位置</string>
+    <string name="d_coordinates">坐标</string>
+    <string name="d_altitude">海拔</string>
     <string name="prepped_for">已置顶分享候选区</string>
 
     <string name="preparing_original">正在准备原图…</string>
@@ -116,6 +151,10 @@
     <string name="prep_not_found">这些图片不在相册中，无法置顶</string>
     <string name="cannot_open">无法打开这张图片</string>
 
+    <string name="photo_wall">照片墙</string>
+    <string name="wall_folders_all">显示全部文件夹</string>
+    <string name="wall_folders_some">显示 %2$d 个文件夹中的 %1$d 个</string>
+    <string name="group_by_folder_desc">在每个月份下按文件夹分小节显示。</string>
     <string name="editor">编辑器</string>
     <string name="start_in_crop">打开时直接进入裁剪</string>
     <string name="start_in_crop_desc">每次编辑都从裁剪和旋转界面开始。</string>

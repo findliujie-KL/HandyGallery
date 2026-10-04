@@ -22,12 +22,17 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.lmxyapp.handygallery.AppLocale
+import com.lmxyapp.handygallery.Folder
 import com.lmxyapp.handygallery.R
 import com.lmxyapp.handygallery.Store
 import com.lmxyapp.handygallery.ThemeMode
@@ -36,8 +41,24 @@ import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(store: Store, onBack: () -> Unit, onLanguage: (String) -> Unit, onManageMedia: () -> Unit) {
+fun SettingsScreen(
+    store: Store,
+    wallFolders: List<Folder>,
+    onBack: () -> Unit,
+    onLanguage: (String) -> Unit,
+    onManageMedia: () -> Unit,
+) {
     val context = LocalContext.current
+    var choosingFolders by remember { mutableStateOf(false) }
+    if (choosingFolders) WallFolderDialog(
+        folders = wallFolders,
+        hidden = store.wallHidden,
+        onDone = {
+            store.chooseWallHidden(it)
+            choosingFolders = false
+        },
+        onDismiss = { choosingFolders = false },
+    )
     Scaffold(
         topBar = {
             TopAppBar(
@@ -77,6 +98,20 @@ fun SettingsScreen(store: Store, onBack: () -> Unit, onLanguage: (String) -> Uni
                 }
                 Choice(name, store.language == tag) { if (store.language != tag) onLanguage(tag) }
             }
+
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            Section(stringResource(R.string.photo_wall))
+            Column(Modifier.fillMaxWidth().clickable { choosingFolders = true }.padding(horizontal = 20.dp, vertical = 10.dp)) {
+                Text(stringResource(R.string.wall_folders), style = MaterialTheme.typography.bodyLarge)
+                val shown = wallFolders.count { it.id !in store.wallHidden }
+                Text(
+                    if (shown == wallFolders.size) stringResource(R.string.wall_folders_all)
+                    else stringResource(R.string.wall_folders_some, shown, wallFolders.size),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Toggle(stringResource(R.string.group_by_folder), stringResource(R.string.group_by_folder_desc), store.wallByFolder, store::chooseWallByFolder)
 
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             Section(stringResource(R.string.editor))
