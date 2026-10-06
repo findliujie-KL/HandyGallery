@@ -123,7 +123,7 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
     Scaffold(
         topBar = {
             val picked = selection
-            if (picked != null) SelectionTopBar(all, picked, vm.store.marks.keys, inTrash = false, actions) { selection = it }
+            if (picked != null) SelectionTopBar(all, picked, vm.store.marks.keys, vm.store.favorites, inTrash = false, actions) { selection = it }
             else CenterAlignedTopAppBar(
                 title = { Text(stringResource(R.string.app_name)) },
                 navigationIcon = { AppIcon(Modifier.padding(start = 14.dp)) },
@@ -183,6 +183,8 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
                 onZoom = vm.store::zoomGrid,
                 byFolder = vm.store.wallByFolder,
                 focusId = vm.focus,
+                frontRow = vm.store.marks.keys,
+                favorites = vm.store.favorites,
                 modifier = Modifier.padding(top = padding.calculateTopPadding()),
                 bottomPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
                 header = {

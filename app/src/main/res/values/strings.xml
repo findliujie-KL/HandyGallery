@@ -42,6 +42,17 @@
     <string name="not_on_wall">Not on photo wall</string>
     <string name="show_in_folder">Show in folder</string>
     <string name="show_on_wall">Show on photo wall</string>
+    <string name="move_to_folder">Move to folder</string>
+    <string name="copy_to_folder">Copy to folder</string>
+    <string name="new_folder">New folder</string>
+    <string name="folder_name">Folder name</string>
+    <string name="create">Create</string>
+    <string name="folder_picker_note">Photos can only be put in folders inside DCIM and Pictures.</string>
+    <string name="moving">Moving…</string>
+    <string name="moved_ok">Moved %1$d</string>
+    <string name="moved_partial">Moved %1$d, %2$d failed</string>
+    <string name="copied_ok">Copied %1$d</string>
+    <string name="copied_partial">Copied %1$d, %2$d failed</string>
     <string name="hide_folder">Hide folder</string>
     <string name="unhide_folder">Unhide folder</string>
     <string name="group_by_folder">Group months by folder</string>

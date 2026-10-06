@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -218,6 +219,8 @@ private fun justify(group: List<Photo>, target: Dp, width: Dp, out: MutableList<
  * [focusId] is a photo to keep in view (the one open in the viewer on top); the wall scrolls to it only
  * when it is off screen.
  *
+ * Photos whose id is in [frontRow] or [favorites] carry a small badge in a bottom corner.
+ *
  * [selection] null means not in selection mode. Don't give this top content padding: drag hit-testing
  * assumes item offsets start at the grid's own origin.
  */
@@ -236,6 +239,8 @@ fun PhotoGrid(
     headingAction: (@Composable () -> Unit)? = null,
     byFolder: Boolean = false,
     focusId: Long? = null,
+    frontRow: Set<Long> = emptySet(),
+    favorites: Set<Long> = emptySet(),
 ) = BoxWithConstraints(modifier.clipToBounds()) {
     val density = LocalDensity.current
     val widthPx = constraints.maxWidth.toFloat()
@@ -378,6 +383,9 @@ fun PhotoGrid(
                     rows = rowsFor(level),
                     photos = photos,
                     wall = walls[level],
+                    // At the smallest size the badges would cover too much of each thumbnail.
+                    frontRow = if (level == walls.lastIndex) emptySet() else frontRow,
+                    favorites = if (level == walls.lastIndex) emptySet() else favorites,
                     state = stateFor(level),
                     // Only a settled wall takes taps and selections; mid-transition there are two on screen.
                     interactive = incoming == null,
@@ -418,6 +426,8 @@ private fun WallLayer(
     rows: List<GridRow>,
     photos: List<Photo>,
     wall: Wall,
+    frontRow: Set<Long>,
+    favorites: Set<Long>,
     state: LazyGridState,
     interactive: Boolean,
     selection: Set<Long>?,
@@ -542,7 +552,7 @@ private fun WallLayer(
                     is GridRow.Cell -> {
                         val photo = row.photo
                         val selected = selection?.contains(photo.id) == true
-                        PhotoCell(photo, row.height, row.thumb, selecting = selection != null, selected = selected, enabled = interactive) {
+                        PhotoCell(photo, row.height, row.thumb, photo.id in frontRow, photo.id in favorites, selecting = selection != null, selected = selected, enabled = interactive) {
                             if (selection == null) onOpen(photo)
                             else onSelectionChange(if (selected) selection - photo.id else selection + photo.id)
                         }
@@ -740,7 +750,17 @@ private fun BoxScope.FastScroller(state: LazyGridState, extent: Extent, label: (
 }
 
 @Composable
-private fun PhotoCell(photo: Photo, height: Dp?, thumb: Int, selecting: Boolean, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
+private fun PhotoCell(
+    photo: Photo,
+    height: Dp?,
+    thumb: Int,
+    frontRow: Boolean,
+    favorite: Boolean,
+    selecting: Boolean,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
     val inset by animateDpAsState(if (selected) 12.dp else 0.dp, label = "inset")
     val primary = MaterialTheme.colorScheme.primary
     Box(
@@ -753,6 +773,15 @@ private fun PhotoCell(photo: Photo, height: Dp?, thumb: Int, selecting: Boolean,
             Modifier.fillMaxSize().padding(inset).clip(RoundedCornerShape(if (selected) 8.dp else 0.dp)),
             size = thumb,
         )
+        // Badges sit in the bottom corners, clear of the selection circle; a little larger on the enlarged levels.
+        val disc = if (height == null) 18.dp else 24.dp
+        val badge = Modifier.padding(inset + 4.dp).size(disc).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f))
+        if (frontRow) Box(badge.align(Alignment.BottomEnd), contentAlignment = Alignment.Center) {
+            Icon(FrsIcons.Prep, contentDescription = stringResource(R.string.prep), tint = Color.White, modifier = Modifier.size(disc * 0.68f))
+        }
+        if (favorite) Box(badge.align(Alignment.BottomStart), contentAlignment = Alignment.Center) {
+            Icon(Icons.Filled.Star, contentDescription = stringResource(R.string.favourite), tint = Color(0xFFFFC107), modifier = Modifier.size(disc * 0.72f))
+        }
         if (selecting) {
             Box(
                 Modifier
@@ -780,11 +809,15 @@ class PhotoActions(
     val restore: (List<Photo>) -> Unit,
     val delete: (List<Photo>) -> Unit,
     val setFavorite: (List<Photo>, Boolean) -> Unit,
+    /** Ask which folder, then move or copy the photos there. */
+    val move: (List<Photo>) -> Unit,
+    val copy: (List<Photo>) -> Unit,
 )
 
 /**
  * Top bar shown while selecting: close, count, then the actions for the selected photos.
  * [marked] are the photo ids already in the front row; when everything selected is, the button offers a choice.
+ * [favorites] likewise: the star adds the selection to favourites, or removes it when all of it is in already.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -792,6 +825,7 @@ fun SelectionTopBar(
     photos: List<Photo>,
     selection: Set<Long>,
     marked: Set<Long>,
+    favorites: Set<Long>,
     inTrash: Boolean,
     actions: PhotoActions,
     onSelectionChange: (Set<Long>?) -> Unit,
@@ -820,6 +854,11 @@ fun SelectionTopBar(
                     onPrep = { act(actions.prep) },
                     onRemove = { act(actions.unprep) },
                 )
+                val allFavorite = selection.isNotEmpty() && favorites.containsAll(selection)
+                IconButton(onClick = { act { actions.setFavorite(it, !allFavorite) } }) {
+                    if (allFavorite) Icon(Icons.Filled.Star, contentDescription = stringResource(R.string.unfavourite), tint = Color(0xFFFFC107))
+                    else Icon(FrsIcons.StarBorder, contentDescription = stringResource(R.string.favourite))
+                }
                 IconButton(onClick = { act(actions.trash) }) { Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.move_to_trash)) }
             }
             var menu by remember { mutableStateOf(false) }
@@ -830,10 +869,10 @@ fun SelectionTopBar(
                         text = { Text(stringResource(R.string.select_all)) },
                         onClick = { menu = false; onSelectionChange(photos.map { it.id }.toSet()) },
                     )
-                    if (!inTrash) DropdownMenuItem(
-                        text = { Text(stringResource(R.string.favourite)) },
-                        onClick = { menu = false; act { actions.setFavorite(it, true) } },
-                    )
+                    if (!inTrash) {
+                        DropdownMenuItem(text = { Text(stringResource(R.string.move_to_folder)) }, onClick = { menu = false; act(actions.move) })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.copy_to_folder)) }, onClick = { menu = false; act(actions.copy) })
+                    }
                 }
             }
         },

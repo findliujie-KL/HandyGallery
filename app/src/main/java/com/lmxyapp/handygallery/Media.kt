@@ -6,15 +6,18 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import androidx.annotation.StringRes
 import androidx.exifinterface.media.ExifInterface
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.io.InputStream
 import java.time.Instant
 import java.time.YearMonth
@@ -332,6 +335,69 @@ object Media {
             throw e
         }
         target
+    }
+
+    /** "Pictures/Trips/" for a photo stored there; null when it isn't on the phone's own storage. */
+    fun relativeDir(photo: Photo): String? {
+        val root = Environment.getExternalStorageDirectory().path + "/"
+        val path = photo.path ?: return null
+        if (!path.startsWith(root)) return null
+        return path.removePrefix(root).substringBeforeLast('/', "") + "/"
+    }
+
+    /** The system only lets an app put pictures under these two top-level folders. */
+    fun canHoldImages(dir: String) = dir.startsWith("DCIM/") || dir.startsWith("Pictures/")
+
+    /**
+     * Copies [photo] byte for byte into [dir] (a path like "Pictures/Trips/"). A name already taken
+     * there gets a number added by the system. The copy keeps the original's modification time, so a
+     * picture with no capture date of its own still sorts beside the original rather than under today.
+     */
+    suspend fun copyTo(context: Context, photo: Photo, dir: String): Uri = withContext(Dispatchers.IO) {
+        val resolver = context.contentResolver
+        val values = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, photo.name)
+            put(MediaStore.Images.Media.MIME_TYPE, photo.mime)
+            put(MediaStore.Images.Media.RELATIVE_PATH, dir)
+            put(MediaStore.Images.Media.IS_PENDING, 1)
+        }
+        val target = resolver.insert(MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY), values)
+            ?: error("Cannot create image")
+        try {
+            openOriginal(context, photo.uri).use { input -> resolver.openOutputStream(target)!!.use { input.copyTo(it) } }
+            values.clear()
+            values.put(MediaStore.Images.Media.IS_PENDING, 0)
+            resolver.update(target, values, null, null)
+        } catch (e: Exception) {
+            resolver.delete(target, null, null)
+            throw e
+        }
+        runCatching {
+            resolver.query(target, arrayOf(MediaStore.Images.Media.DATA), null, null, null)?.use { c ->
+                if (c.moveToFirst()) c.getString(0) else null
+            }?.let { path ->
+                if (File(path).setLastModified(photo.dateModified * 1000)) MediaScannerConnection.scanFile(context, arrayOf(path), null, null)
+            }
+        }
+        target
+    }
+
+    /**
+     * Moves [photo]'s file into [dir]; its id, and so its favourite and front-row status, stay the same.
+     * Caller must already hold write access. If the name is taken there, a numbered one is tried.
+     */
+    fun moveTo(context: Context, photo: Photo, dir: String): Boolean {
+        fun attempt(name: String?) = runCatching {
+            val values = ContentValues().apply {
+                put(MediaStore.Images.Media.RELATIVE_PATH, dir)
+                if (name != null) put(MediaStore.Images.Media.DISPLAY_NAME, name)
+            }
+            context.contentResolver.update(photo.uri, values, null, null) > 0
+        }.getOrDefault(false)
+        if (attempt(null)) return true
+        val stem = photo.name.substringBeforeLast('.')
+        val extension = photo.name.substringAfterLast('.', "").let { if (it.isEmpty()) "" else ".$it" }
+        return (1..5).any { attempt("$stem ($it)$extension") }
     }
 
     fun canReplace(photo: Photo) = photo.mime in setOf("image/jpeg", "image/png", "image/webp")

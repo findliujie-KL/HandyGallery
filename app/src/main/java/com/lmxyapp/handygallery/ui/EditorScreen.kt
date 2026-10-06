@@ -143,6 +143,7 @@ fun EditorScreen(
     copied: EditState?,
     onCancel: () -> Unit,
     onExport: (EditState, ExportMode) -> Unit,
+    onEditElsewhere: () -> Unit,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -247,6 +248,11 @@ fun EditorScreen(
                 Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
                     TextButton(onClick = ::leave) { Text(stringResource(R.string.cancel), color = Color.White) }
                     Box(Modifier.weight(1f))
+                    // Hands the original photo to another editor. This one stays open underneath, so
+                    // edits made here are still here to save or discard on the way back.
+                    IconButton(onClick = onEditElsewhere) {
+                        Icon(FrsIcons.OpenElsewhere, contentDescription = stringResource(R.string.edit_elsewhere))
+                    }
                     IconButton(onClick = { index-- }, enabled = index > 0) { Icon(FrsIcons.Undo, contentDescription = stringResource(R.string.undo)) }
                     IconButton(onClick = { index++ }, enabled = index < history.lastIndex) {
                         Icon(FrsIcons.Undo, contentDescription = stringResource(R.string.redo), Modifier.graphicsLayer { scaleX = -1f })

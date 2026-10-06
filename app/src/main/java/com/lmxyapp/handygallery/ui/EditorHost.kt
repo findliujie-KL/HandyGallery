@@ -125,6 +125,11 @@ fun EditorHost(
             copied = copied,
             onCancel = onClose,
             onExport = ::export,
+            onEditElsewhere = {
+                // A picture opened from another app may not be ours to pass on; say so rather than crash.
+                runCatching { FileSharer.editElsewhere(context, photo) }
+                    .onFailure { toast(context.getString(R.string.cannot_open)) }
+            },
         )
         busy?.let { BusyDialog(it) }
         if (offerDelete) AlertDialog(

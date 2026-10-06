@@ -35,21 +35,27 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.lmxyapp.handygallery.share.FileSharer
 import com.lmxyapp.handygallery.ui.BusyDialog
 import com.lmxyapp.handygallery.ui.CollectionScreen
 import com.lmxyapp.handygallery.ui.EditorHost
+import com.lmxyapp.handygallery.ui.FolderPickerDialog
 import com.lmxyapp.handygallery.ui.FrsTheme
 import com.lmxyapp.handygallery.ui.HomeScreen
 import com.lmxyapp.handygallery.ui.PhotoActions
 import com.lmxyapp.handygallery.ui.SettingsScreen
 import com.lmxyapp.handygallery.ui.isDark
 import com.lmxyapp.handygallery.ui.ViewerScreen
+import com.lmxyapp.handygallery.ui.destinations
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+/** Photos on their way to another folder, held while the folder is being chosen. */
+private class Transfer(val photos: List<Photo>, val copy: Boolean)
 
 class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     val store = Store.get(app)
@@ -231,6 +237,47 @@ private fun App(vm: GalleryViewModel) {
     }
 
     val resolver = context.contentResolver
+
+    /** Photos waiting for the user to say which folder they go to, and whether as copies. */
+    var transfer by remember { mutableStateOf<Transfer?>(null) }
+
+    fun copyInto(photos: List<Photo>, dir: String) = runBusy(context.getString(R.string.copying)) {
+        val done = photos.count { runCatching { Media.copyTo(context, it, dir) }.isSuccess }
+        vm.reload()
+        toast(
+            if (done == photos.size) context.getString(R.string.copied_ok, done)
+            else context.getString(R.string.copied_partial, done, photos.size - done),
+        )
+    }
+
+    fun moveInto(photos: List<Photo>, dir: String) {
+        // Ones already in that folder have nowhere to go.
+        val moving = photos.filter { Media.relativeDir(it) != dir }
+        if (moving.isEmpty()) return
+        withConsent(MediaStore.createWriteRequest(resolver, moving.map { it.uri })) {
+            runBusy(context.getString(R.string.moving)) {
+                val done = withContext(Dispatchers.IO) { moving.count { Media.moveTo(context, it, dir) } }
+                vm.reload()
+                toast(
+                    if (done == moving.size) context.getString(R.string.moved_ok, done)
+                    else context.getString(R.string.moved_partial, done, moving.size - done),
+                )
+            }
+        }
+    }
+
+    transfer?.let { job ->
+        FolderPickerDialog(
+            title = stringResource(if (job.copy) R.string.copy_to_folder else R.string.move_to_folder),
+            choices = remember(vm.wallFolders) { destinations(Media.folders(vm.sorted, FolderSort.NameAsc)) },
+            onPick = { dir ->
+                transfer = null
+                if (job.copy) copyInto(job.photos, dir) else moveInto(job.photos, dir)
+            },
+            onDismiss = { transfer = null },
+        )
+    }
+
     val actions = remember {
         PhotoActions(
             shareFullRes = { photos ->
@@ -277,6 +324,8 @@ private fun App(vm: GalleryViewModel) {
             restore = { photos -> withConsent(MediaStore.createTrashRequest(resolver, photos.map { it.uri }, false)) { vm.reload() } },
             delete = { photos -> withConsent(MediaStore.createDeleteRequest(resolver, photos.map { it.uri })) { vm.reload() } },
             setFavorite = { photos, favorite -> vm.store.setFavorite(photos.map { it.id }, favorite) },
+            move = { photos -> transfer = Transfer(photos, copy = false) },
+            copy = { photos -> transfer = Transfer(photos, copy = true) },
         )
     }
 

@@ -42,7 +42,7 @@ fun CollectionScreen(vm: GalleryViewModel, source: Source, actions: PhotoActions
     Scaffold(
         topBar = {
             val picked = selection
-            if (picked != null) SelectionTopBar(photos, picked, vm.store.marks.keys, inTrash = source == Source.Trash, actions) { selection = it }
+            if (picked != null) SelectionTopBar(photos, picked, vm.store.marks.keys, vm.store.favorites, inTrash = source == Source.Trash, actions) { selection = it }
             else TopAppBar(
                 title = {
                     Column {
@@ -95,6 +95,9 @@ fun CollectionScreen(vm: GalleryViewModel, source: Source, actions: PhotoActions
             zoom = vm.store.gridZoom,
             onZoom = vm.store::zoomGrid,
             focusId = vm.focus,
+            // On the Front Row and Favourites pages every photo would carry that page's badge, which says nothing.
+            frontRow = if (source == Source.FullResShared || source == Source.Trash) emptySet() else vm.store.marks.keys,
+            favorites = if (source == Source.Favorites || source == Source.Trash) emptySet() else vm.store.favorites,
             modifier = Modifier.padding(top = padding.calculateTopPadding()),
             bottomPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
         )

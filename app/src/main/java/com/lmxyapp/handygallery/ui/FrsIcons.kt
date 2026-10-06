@@ -26,6 +26,10 @@ object FrsIcons {
     val Collage by lazy {
         icon("Collage", "M3,13h8V3H3v10zM3,21h8v-6H3v6zM13,21h8V11h-8v10zM13,3v6h8V3h-8z")
     }
+    /** An arrow leaving a box: open this in another app. */
+    val OpenElsewhere by lazy {
+        icon("OpenElsewhere", "M19,19H5V5h7V3H5c-1.11,0 -2,0.9 -2,2v14c0,1.1 0.89,2 2,2h14c1.1,0 2,-0.9 2,-2v-7h-2v7zM14,3v2h3.59l-9.83,9.83 1.41,1.41L19,6.41V10h2V3h-7z")
+    }
     val Sort by lazy {
         icon("Sort", "M16,17.01V10h-2v7.01h-3L15,21l4,-3.99h-3zM9,3L5,6.99h3V14h2V6.99h3L9,3z")
     }

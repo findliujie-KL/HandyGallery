@@ -294,6 +294,16 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
                                     details = true
                                 },
                             )
+                            if (!inTrash) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.move_to_folder)) },
+                                    onClick = { menu = false; actions.move(listOf(current)) },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.copy_to_folder)) },
+                                    onClick = { menu = false; actions.copy(listOf(current)) },
+                                )
+                            }
                         }
                     }
                 }

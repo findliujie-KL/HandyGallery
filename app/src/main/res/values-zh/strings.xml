@@ -36,6 +36,17 @@
     <string name="not_on_wall">未在照片墙显示</string>
     <string name="show_in_folder">在文件夹中查看</string>
     <string name="show_on_wall">在照片墙中查看</string>
+    <string name="move_to_folder">移动到文件夹</string>
+    <string name="copy_to_folder">复制到文件夹</string>
+    <string name="new_folder">新建文件夹</string>
+    <string name="folder_name">文件夹名称</string>
+    <string name="create">创建</string>
+    <string name="folder_picker_note">照片只能放入 DCIM 和 Pictures 内的文件夹。</string>
+    <string name="moving">正在移动…</string>
+    <string name="moved_ok">已移动 %1$d 张</string>
+    <string name="moved_partial">已移动 %1$d 张，%2$d 张失败</string>
+    <string name="copied_ok">已复制 %1$d 张</string>
+    <string name="copied_partial">已复制 %1$d 张，%2$d 张失败</string>
     <string name="hide_folder">隐藏文件夹</string>
     <string name="unhide_folder">取消隐藏</string>
     <string name="group_by_folder">每月按文件夹分组</string>
