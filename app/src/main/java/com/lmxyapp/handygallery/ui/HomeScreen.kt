@@ -137,7 +137,8 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
         onDismiss = { choosingShortcuts = false },
     )
 
-    // The tiles above the wall. A folder that has since gone leaves its tile out rather than an empty one.
+    // The tiles above the wall. A folder that has since gone, or a collection with nothing in it yet,
+    // leaves its tile out rather than showing an empty one.
     val tiles = vm.store.wallShortcuts.mapNotNull { key ->
         when {
             key == Store.SHORTCUT_SCREENSHOTS ->
@@ -151,7 +152,7 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
             }
             else -> null
         }
-    }
+    }.filter { it.cover != null }
     val header: (@Composable () -> Unit)? = if (tiles.isEmpty()) null else {
         {
             ShortcutRow(tiles, enabled = !selecting, onOpen = vm::open) { keys ->
@@ -179,7 +180,7 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
                             DropdownMenuItem(text = { Text(stringResource(label)) }, onClick = { menu = false; onClick() })
                         item(R.string.favourites) { vm.open(Screen.Collection(Source.Favorites)) }
                         // Front Row is listed here only when it has no tile on the wall to open it from.
-                        if (Store.SHORTCUT_FRONT_ROW !in vm.store.wallShortcuts) {
+                        if (tiles.none { it.key == Store.SHORTCUT_FRONT_ROW }) {
                             item(R.string.fullresshared) { vm.open(Screen.Collection(Source.FullResShared)) }
                         }
                         if (vm.homeTab == 0) {
