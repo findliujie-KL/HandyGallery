@@ -60,6 +60,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -119,11 +120,29 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
         LaunchedEffect(Unit) { vm.back() }
         return
     }
-    val pager = rememberPagerState(
-        initialPage = photos.indexOfFirst { it.id == screen.currentId }.coerceAtLeast(0),
-    ) { photos.size }
+    // Switching the photo between the wall and its folder hands this composable a new [screen]. Only the
+    // pager is rebuilt for it; everything else stays, so the photo holds still instead of the whole
+    // viewer fading out and back in.
+    val pager = key(screen) {
+        rememberPagerState(
+            initialPage = photos.indexOfFirst { it.id == screen.currentId }.coerceAtLeast(0),
+        ) { photos.size }
+    }
+    // The film strip is the one thing that visibly changes, so it fades over to the new set.
+    val stripAlpha = remember { Animatable(1f) }
+    var stripFor by remember { mutableStateOf(screen) }
+    LaunchedEffect(screen) {
+        if (screen !== stripFor) {
+            stripFor = screen
+            stripAlpha.snapTo(0f)
+            stripAlpha.animateTo(1f, tween(260))
+        }
+    }
     val current = photos[pager.currentPage.coerceIn(photos.indices)]
-    LaunchedEffect(current.id) { screen.currentId = current.id }
+    LaunchedEffect(current.id) {
+        screen.currentId = current.id
+        vm.focus = current.id
+    }
     var chrome by remember { mutableStateOf(true) }
     val inTrash = screen.source == Source.Trash
     val scope = rememberCoroutineScope()
@@ -203,7 +222,9 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
             Box(Modifier.fillMaxSize().graphicsLayer { alpha = 1f - away() }.background(Color.Black))
             HorizontalPager(
                 pager,
-                key = { photos[it].id },
+                // When the viewer moves to another list, the outgoing pager can still be asked about a
+                // page the new, shorter list doesn't have; that must not be an index out of range.
+                key = { photos.getOrNull(it)?.id ?: -1L - it },
                 beyondViewportPageCount = 1,
                 modifier = Modifier.graphicsLayer {
                     // Going down the photo follows the finger and shrinks; going up it rises at half
@@ -215,8 +236,9 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
                     scaleY = shrink
                 },
             ) { page ->
+                val photo = photos.getOrNull(page) ?: return@HorizontalPager
                 ZoomableImage(
-                    photos[page],
+                    photo,
                     active = page == pager.currentPage,
                     unzoom = unzoom,
                     onZoomed = { zoomed = it },
@@ -236,6 +258,18 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
                     }
                     Box(Modifier.weight(1f))
                     if (!inTrash) {
+                        // The same photo, seen from the other side: among its folder's photos, or on the wall.
+                        if (screen.source is Source.Folder) {
+                            val wall = vm.photosFor(Source.All)
+                            val onWall = remember(current.id, wall) { wall.any { it.id == current.id } }
+                            IconButton(onClick = { vm.showOnWall(current) }, enabled = onWall) {
+                                Icon(FrsIcons.Collage, contentDescription = stringResource(if (onWall) R.string.show_on_wall else R.string.not_on_wall))
+                            }
+                        } else {
+                            IconButton(onClick = { vm.showInFolder(current) }) {
+                                Icon(FrsIcons.Folder, contentDescription = stringResource(R.string.show_in_folder))
+                            }
+                        }
                         val favorite = current.id in vm.store.favorites
                         IconButton(onClick = { actions.setFavorite(listOf(current), !favorite) }) {
                             if (favorite) Icon(Icons.Filled.Star, contentDescription = stringResource(R.string.unfavourite), tint = StarYellow)
@@ -264,7 +298,9 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
                     }
                 }
                 Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Scrim).navigationBarsPadding()) {
-                    FilmStrip(photos, pager)
+                    Box(Modifier.graphicsLayer { alpha = stripAlpha.value }) {
+                        key(screen) { FilmStrip(photos, pager) }
+                    }
                     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                         if (inTrash) {
                             BarAction(Icons.Filled.Refresh, stringResource(R.string.restore)) { actions.restore(listOf(current)) }
@@ -344,7 +380,7 @@ private fun FilmStrip(photos: List<Photo>, pager: PagerState) {
             horizontalArrangement = Arrangement.spacedBy(gap),
             flingBehavior = rememberSnapFlingBehavior(strip, SnapPosition.Center),
         ) {
-            items(photos.size, key = { photos[it].id }) { i ->
+            items(photos.size, key = { photos.getOrNull(it)?.id ?: -1L - it }) { i ->
                 val shape = RoundedCornerShape(4.dp)
                 Thumb(
                     photos[i],

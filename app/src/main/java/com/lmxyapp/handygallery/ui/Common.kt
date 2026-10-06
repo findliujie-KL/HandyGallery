@@ -1,5 +1,8 @@
 package com.lmxyapp.handygallery.ui
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.util.LruCache
 import android.util.Size
 import androidx.compose.foundation.Image
@@ -43,12 +46,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.res.stringResource
+import com.lmxyapp.handygallery.Media
 import com.lmxyapp.handygallery.Photo
 import com.lmxyapp.handygallery.R
 import com.lmxyapp.handygallery.Source
 import com.lmxyapp.handygallery.ThemeMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 
 private val LightColors = lightColorScheme(
     primary = Color(0xFF1B8754),
@@ -182,6 +187,71 @@ private val thumbCache = object : LruCache<String, ImageBitmap>(160 * 1024 * 102
 fun cachedThumb(photo: Photo): ImageBitmap? =
     thumbCache.get("${photo.cacheKey}@1536") ?: thumbCache.get("${photo.cacheKey}@1024") ?: thumbCache.get("${photo.cacheKey}@512")
 
+/**
+ * The system's thumbnail when it is good enough, otherwise one decoded from the photo itself. For some
+ * files (large exports from editing apps, mostly) the system returns the tiny preview embedded in the
+ * file, which is a blur at any real size. Decoding a large photo is slow, so those results are kept on
+ * disk (see [ThumbStore]) and only made once.
+ */
+private fun loadThumb(context: Context, photo: Photo, size: Int): ImageBitmap? {
+    val name = "${photo.cacheKey}@$size"
+    ThumbStore.read(context, name)?.let { return it.asImageBitmap() }
+    val system = runCatching { context.contentResolver.loadThumbnail(photo.uri, Size(size, size), null) }.getOrNull()
+    // What a proper thumbnail's longer side would be: the size asked for, or the photo's own if smaller.
+    val expected = if (photo.width > 0 && photo.height > 0) minOf(size, maxOf(photo.width, photo.height)) else size
+    if (system != null && maxOf(system.width, system.height) >= expected * 0.6f) return system.asImageBitmap()
+    val own = runCatching { Media.decode(context, photo.uri, maxEdge = size) }.getOrNull() ?: return system?.asImageBitmap()
+    ThumbStore.write(context, name, own)
+    return own.asImageBitmap()
+}
+
+/**
+ * Thumbnails this app had to decode itself, kept in the cache folder between launches. Names carry the
+ * photo's modification time, so an edited photo gets a new entry and the old one ages out. The folder
+ * is held to [LIMIT] by dropping the entries that have gone unused longest.
+ */
+private object ThumbStore {
+    private const val LIMIT = 300L * 1024 * 1024
+    private var pruned = false
+
+    private fun dir(context: Context) = File(context.cacheDir, "thumbs")
+
+    fun read(context: Context, name: String): Bitmap? {
+        val file = File(dir(context), name)
+        if (!file.exists()) return null
+        // Marks it as recently used for the pruning below.
+        file.setLastModified(System.currentTimeMillis())
+        return runCatching { BitmapFactory.decodeFile(file.path) }.getOrNull()
+    }
+
+    fun write(context: Context, name: String, bitmap: Bitmap) {
+        runCatching {
+            val dir = dir(context).apply { mkdirs() }
+            prune(dir)
+            // Written under another name first, so a half-written file is never read back as a thumbnail.
+            val partial = File(dir, "$name.part")
+            // JPEG is quick to write and read; only images with transparency need a format that keeps it.
+            val format = if (bitmap.hasAlpha()) Bitmap.CompressFormat.WEBP_LOSSY else Bitmap.CompressFormat.JPEG
+            partial.outputStream().use { bitmap.compress(format, 88, it) }
+            partial.renameTo(File(dir, name))
+        }
+    }
+
+    /** Once per launch: trims the folder back under the limit, oldest use first. */
+    @Synchronized
+    private fun prune(dir: File) {
+        if (pruned) return
+        pruned = true
+        val files = dir.listFiles()?.sortedBy { it.lastModified() } ?: return
+        var total = files.sumOf { it.length() }
+        for (file in files) {
+            if (total <= LIMIT) break
+            total -= file.length()
+            file.delete()
+        }
+    }
+}
+
 @Composable
 fun Thumb(photo: Photo, modifier: Modifier = Modifier, size: Int = 512) {
     val context = LocalContext.current
@@ -189,11 +259,7 @@ fun Thumb(photo: Photo, modifier: Modifier = Modifier, size: Int = 512) {
     var bitmap by remember(key) { mutableStateOf(thumbCache.get(key)) }
     LaunchedEffect(key) {
         if (bitmap == null) {
-            bitmap = withContext(Dispatchers.IO) {
-                runCatching { context.contentResolver.loadThumbnail(photo.uri, Size(size, size), null).asImageBitmap() }
-                    .getOrNull()
-                    ?.also { thumbCache.put(key, it) }
-            }
+            bitmap = withContext(Dispatchers.IO) { loadThumb(context, photo, size)?.also { thumbCache.put(key, it) } }
         }
     }
     Box(modifier.background(Color.Gray.copy(alpha = 0.2f))) {

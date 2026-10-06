@@ -110,7 +110,34 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun back() {
-        if (stack.size > 1) stack.removeAt(stack.lastIndex)
+        if (stack.size > 1) {
+            if (stack.last() is Screen.Viewer) focus = null
+            stack.removeAt(stack.lastIndex)
+        }
+    }
+
+    /**
+     * The photo open in the viewer. The grid underneath keeps it in view, so closing the viewer lands
+     * on that photo however far the user swiped.
+     */
+    var focus by mutableStateOf<Long?>(null)
+
+    /** Re-opens [photo] among its own folder's photos; the folder's grid is what the viewer closes onto. */
+    fun showInFolder(photo: Photo) {
+        val folder = Source.Folder(photo.bucketId, photo.bucketName)
+        stack.removeRange(1, stack.size)
+        homeTab = 1
+        stack += Screen.Collection(folder)
+        stack += Screen.Viewer(folder, photo.id)
+        focus = photo.id
+    }
+
+    /** Re-opens [photo] among the photo wall's photos; the wall is what the viewer closes onto. */
+    fun showOnWall(photo: Photo) {
+        stack.removeRange(1, stack.size)
+        homeTab = 0
+        stack += Screen.Viewer(Source.All, photo.id)
+        focus = photo.id
     }
 
     fun reload() {

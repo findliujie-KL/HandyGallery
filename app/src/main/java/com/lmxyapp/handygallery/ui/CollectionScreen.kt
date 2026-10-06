@@ -94,6 +94,7 @@ fun CollectionScreen(vm: GalleryViewModel, source: Source, actions: PhotoActions
             onOpen = { vm.open(Screen.Viewer(source, it.id)) },
             zoom = vm.store.gridZoom,
             onZoom = vm.store::zoomGrid,
+            focusId = vm.focus,
             modifier = Modifier.padding(top = padding.calculateTopPadding()),
             bottomPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
         )

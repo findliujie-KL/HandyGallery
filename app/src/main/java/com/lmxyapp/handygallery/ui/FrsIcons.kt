@@ -22,6 +22,10 @@ object FrsIcons {
     val Folder by lazy {
         icon("Folder", "M10,4H4c-1.1,0 -1.99,0.9 -1.99,2L2,18c0,1.1 0.9,2 2,2h16c1.1,0 2,-0.9 2,-2V8c0,-1.1 -0.9,-2 -2,-2h-8l-2,-2z")
     }
+    /** Tiles of different sizes: stands for the photo wall. */
+    val Collage by lazy {
+        icon("Collage", "M3,13h8V3H3v10zM3,21h8v-6H3v6zM13,21h8V11h-8v10zM13,3v6h8V3h-8z")
+    }
     val Sort by lazy {
         icon("Sort", "M16,17.01V10h-2v7.01h-3L15,21l4,-3.99h-3zM9,3L5,6.99h3V14h2V6.99h3L9,3z")
     }

@@ -215,6 +215,9 @@ private fun justify(group: List<Photo>, target: Dp, width: Dp, out: MutableList<
  * [byFolder] adds a folder heading wherever the folder changes within a month; [photos] must then be
  * ordered that way (see Media.byMonthAndFolder).
  *
+ * [focusId] is a photo to keep in view (the one open in the viewer on top); the wall scrolls to it only
+ * when it is off screen.
+ *
  * [selection] null means not in selection mode. Don't give this top content padding: drag hit-testing
  * assumes item offsets start at the grid's own origin.
  */
@@ -232,6 +235,7 @@ fun PhotoGrid(
     header: (@Composable () -> Unit)? = null,
     headingAction: (@Composable () -> Unit)? = null,
     byFolder: Boolean = false,
+    focusId: Long? = null,
 ) = BoxWithConstraints(modifier.clipToBounds()) {
     val density = LocalDensity.current
     val widthPx = constraints.maxWidth.toFloat()
@@ -274,6 +278,20 @@ fun PhotoGrid(
     LaunchedEffect(zoom) { if (target == null) shown = zoom.coerceIn(walls.indices) }
 
     val headerCount = if (header != null) 1 else 0
+
+    LaunchedEffect(focusId) {
+        val id = focusId ?: return@LaunchedEffect
+        val state = stateFor(shown)
+        // In view means its middle is on screen; a sliver peeking in at an edge doesn't count.
+        val inView = state.layoutInfo.visibleItemsInfo.firstOrNull { it.key == id }?.let {
+            val middle = it.offset.y + it.size.height / 2
+            middle >= 0 && middle <= state.layoutInfo.viewportEndOffset
+        } == true
+        if (inView) return@LaunchedEffect
+        val index = rowsFor(shown).indexOfFirst { it is GridRow.Cell && it.photo.id == id }
+        // A third of the way down rather than at the very top, so its heading and neighbours show too.
+        if (index >= 0) state.scrollToItem(index + headerCount, -(heightPx / 3).roundToInt())
+    }
 
     /** Opens [to] underneath [shown], scrolled so the photo under the pinch stays under it. */
     val begin by rememberUpdatedState { to: Int ->

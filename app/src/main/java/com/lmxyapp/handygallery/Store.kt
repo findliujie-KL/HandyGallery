@@ -136,6 +136,15 @@ class Store private constructor(context: Context) {
         prefs.edit { putInt("photoSort", sort.ordinal) }
     }
 
+    /** Bucket ids in the order the user arranged the Folders tab. */
+    var folderOrder by mutableStateOf(prefs.getString("folderOrder", "").orEmpty().split(',').mapNotNull { it.toLongOrNull() })
+        private set
+
+    fun chooseFolderOrder(ids: List<Long>) {
+        folderOrder = ids
+        prefs.edit { putString("folderOrder", ids.joinToString(",")) }
+    }
+
     fun sortFolders(sort: FolderSort) {
         folderSort = sort
         prefs.edit { putInt("folderSort", sort.ordinal) }

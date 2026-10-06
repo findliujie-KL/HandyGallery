@@ -27,7 +27,10 @@ import kotlin.math.sqrt
 enum class PhotoSort(@StringRes val label: Int) { Taken(R.string.sort_taken), Added(R.string.sort_added), Modified(R.string.sort_modified) }
 
 enum class FolderSort(@StringRes val label: Int) {
-    Recent(R.string.fsort_recent), NameAsc(R.string.fsort_name_asc), NameDesc(R.string.fsort_name_desc), Size(R.string.fsort_size)
+    Recent(R.string.fsort_recent), NameAsc(R.string.fsort_name_asc), NameDesc(R.string.fsort_name_desc), Size(R.string.fsort_size),
+
+    /** The order the user arranged; added last so saved choices of the others keep their position. */
+    Manual(R.string.fsort_manual),
 }
 
 data class Photo(
@@ -66,6 +69,9 @@ data class Photo(
 data class Folder(val id: Long, val name: String, val cover: Photo, val count: Int, val size: Long, val latest: Long)
 
 object Media {
+    /** Id of the Favourites entry on the Folders tab, which is a collection rather than a real folder. */
+    const val FAVORITES_ID = Long.MIN_VALUE
+
     val permissions: Array<String>
         get() = buildList {
             if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.READ_MEDIA_IMAGES)
@@ -173,16 +179,28 @@ object Media {
         return out
     }
 
-    fun folders(photos: List<Photo>, sort: FolderSort): List<Folder> {
-        val folders = photos.groupBy { it.bucketId }.map { (id, items) ->
+    /**
+     * [order] is the user's arrangement of bucket ids, used by [FolderSort.Manual]. [extra] is an entry
+     * that isn't a real folder (Favourites): it leads the list, except in manual order where it is
+     * arranged like any other.
+     */
+    fun folders(photos: List<Photo>, sort: FolderSort, order: List<Long> = emptyList(), extra: Folder? = null): List<Folder> {
+        val real = photos.groupBy { it.bucketId }.map { (id, items) ->
             val cover = items.maxBy { it.time(PhotoSort.Taken) }
             Folder(id, cover.bucketName, cover, items.size, items.sumOf { it.size }, cover.time(PhotoSort.Taken))
         }
+        if (extra != null && sort != FolderSort.Manual) return listOf(extra) + folders(photos, sort, order)
+        val folders = if (extra != null) real + extra else real
         return when (sort) {
             FolderSort.Recent -> folders.sortedByDescending { it.latest }
             FolderSort.NameAsc -> folders.sortedBy { it.name.lowercase() }
             FolderSort.NameDesc -> folders.sortedByDescending { it.name.lowercase() }
             FolderSort.Size -> folders.sortedByDescending { it.size }
+            FolderSort.Manual -> {
+                val place = order.withIndex().associate { it.value to it.index }
+                // Folders that appeared after the user arranged things go to the end, newest first.
+                folders.sortedWith(compareBy<Folder> { place[it.id] ?: Int.MAX_VALUE }.thenByDescending { it.latest })
+            }
         }
     }
 

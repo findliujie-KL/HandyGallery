@@ -32,6 +32,7 @@
     <string name="fsort_recent">Recent</string>
     <string name="fsort_name_asc">Name (A–Z)</string>
     <string name="fsort_name_desc">Name (Z–A)</string>
+    <string name="fsort_manual">Manual</string>
     <string name="fsort_size">Size</string>
 
     <!-- Folders -->
@@ -39,6 +40,8 @@
     <string name="wall_hide">Hide from photo wall</string>
     <string name="wall_show">Show on photo wall</string>
     <string name="not_on_wall">Not on photo wall</string>
+    <string name="show_in_folder">Show in folder</string>
+    <string name="show_on_wall">Show on photo wall</string>
     <string name="hide_folder">Hide folder</string>
     <string name="unhide_folder">Unhide folder</string>
     <string name="group_by_folder">Group months by folder</string>

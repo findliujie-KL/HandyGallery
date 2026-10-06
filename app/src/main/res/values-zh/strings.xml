@@ -27,12 +27,15 @@
     <string name="fsort_recent">最近</string>
     <string name="fsort_name_asc">名称 (A–Z)</string>
     <string name="fsort_name_desc">名称 (Z–A)</string>
+    <string name="fsort_manual">手动</string>
     <string name="fsort_size">大小</string>
 
     <string name="wall_folders">照片墙显示的文件夹</string>
     <string name="wall_hide">不在照片墙显示</string>
     <string name="wall_show">在照片墙显示</string>
     <string name="not_on_wall">未在照片墙显示</string>
+    <string name="show_in_folder">在文件夹中查看</string>
+    <string name="show_on_wall">在照片墙中查看</string>
     <string name="hide_folder">隐藏文件夹</string>
     <string name="unhide_folder">取消隐藏</string>
     <string name="group_by_folder">每月按文件夹分组</string>
