@@ -27,9 +27,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -73,10 +75,12 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -87,6 +91,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lmxyapp.handygallery.GalleryViewModel
@@ -112,9 +117,13 @@ private val screenCache = LruCache<String, ImageBitmap>(6)
  * Full-screen photo. It is drawn over the screen it was opened from, so the vertical gestures can
  * move it continuously: drag up and the details sheet rises under the photo, drag down and the photo
  * shrinks away to reveal the wall behind it.
+ *
+ * [barBelow] is the height of the bottom bar on the screen underneath, not counting the system's own
+ * navigation area. While the photo is leaving it is cut off there, so it goes behind that bar instead
+ * of sliding over it.
  */
 @Composable
-fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActions) {
+fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActions, barBelow: Dp = 0.dp) {
     val photos = vm.photosFor(screen.source)
     if (photos.isEmpty()) {
         LaunchedEffect(Unit) { vm.back() }
@@ -218,7 +227,13 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
         /** 0 at rest, 1 once the photo has been dragged far enough down to be clearly leaving. */
         fun away() = (pull.value / (height * 0.4f)).coerceIn(0f, 1f)
 
-        Box(Modifier.fillMaxSize().graphicsLayer { alpha = appear.value }) {
+        val barPx = if (barBelow > 0.dp) with(density) { barBelow.toPx() } + WindowInsets.navigationBars.getBottom(density) else 0f
+        Box(
+            Modifier.fillMaxSize().graphicsLayer { alpha = appear.value }.drawWithContent {
+                if (pull.value > 0f && barPx > 0f) clipRect(bottom = size.height - barPx) { this@drawWithContent.drawContent() }
+                else drawContent()
+            },
+        ) {
             Box(Modifier.fillMaxSize().graphicsLayer { alpha = 1f - away() }.background(Color.Black))
             HorizontalPager(
                 pager,

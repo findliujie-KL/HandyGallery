@@ -35,6 +35,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -380,7 +381,8 @@ private fun App(vm: GalleryViewModel) {
                 },
             )
         }
-        if (top is Screen.Viewer) ViewerScreen(vm, top, actions)
+        // The home screen is the only one with a bar along the bottom (Material's navigation bar, 80dp tall).
+        if (top is Screen.Viewer) ViewerScreen(vm, top, actions, barBelow = if (base is Screen.Home) 80.dp else 0.dp)
     }
     vm.busy?.let { BusyDialog(it) }
 }
