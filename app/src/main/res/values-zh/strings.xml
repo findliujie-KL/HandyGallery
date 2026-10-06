@@ -47,6 +47,9 @@
     <string name="moved_partial">已移动 %1$d 张，%2$d 张失败</string>
     <string name="copied_ok">已复制 %1$d 张</string>
     <string name="copied_partial">已复制 %1$d 张，%2$d 张失败</string>
+    <string name="wall_shortcuts">照片墙快捷入口</string>
+    <string name="shortcuts_limit">最多选择 %1$d 个。</string>
+    <string name="shortcuts_none">无</string>
     <string name="hide_folder">隐藏文件夹</string>
     <string name="unhide_folder">取消隐藏</string>
     <string name="group_by_folder">每月按文件夹分组</string>

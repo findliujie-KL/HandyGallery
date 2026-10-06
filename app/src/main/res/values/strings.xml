@@ -53,6 +53,9 @@
     <string name="moved_partial">Moved %1$d, %2$d failed</string>
     <string name="copied_ok">Copied %1$d</string>
     <string name="copied_partial">Copied %1$d, %2$d failed</string>
+    <string name="wall_shortcuts">Photo wall shortcuts</string>
+    <string name="shortcuts_limit">Choose up to %1$d.</string>
+    <string name="shortcuts_none">None</string>
     <string name="hide_folder">Hide folder</string>
     <string name="unhide_folder">Unhide folder</string>
     <string name="group_by_folder">Group months by folder</string>

@@ -2,6 +2,7 @@ package com.lmxyapp.handygallery.ui
 
 import android.text.format.Formatter
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
@@ -53,6 +55,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -71,6 +74,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
@@ -87,8 +91,10 @@ import com.lmxyapp.handygallery.PhotoSort
 import com.lmxyapp.handygallery.R
 import com.lmxyapp.handygallery.Screen
 import com.lmxyapp.handygallery.Source
+import com.lmxyapp.handygallery.Store
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -99,6 +105,7 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
     BackHandler(selecting) { selection = null }
     var showHidden by remember { mutableStateOf(false) }
     var choosingFolders by remember { mutableStateOf(false) }
+    var choosingShortcuts by remember { mutableStateOf(false) }
     val hidden = vm.store.hiddenFolders
     val favourites = vm.photosFor(Source.Favorites)
     val favouritesName = stringResource(R.string.favourites)
@@ -120,6 +127,40 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
         onDismiss = { choosingFolders = false },
     )
 
+    if (choosingShortcuts) ShortcutsDialog(
+        choices = shortcutChoices(vm.wallFolders),
+        chosen = vm.store.wallShortcuts,
+        onDone = {
+            vm.store.chooseWallShortcuts(it)
+            choosingShortcuts = false
+        },
+        onDismiss = { choosingShortcuts = false },
+    )
+
+    // The tiles above the wall. A folder that has since gone leaves its tile out rather than an empty one.
+    val tiles = vm.store.wallShortcuts.mapNotNull { key ->
+        when {
+            key == Store.SHORTCUT_SCREENSHOTS ->
+                Tile(key, Source.Screenshots, vm.photosFor(Source.Screenshots).firstOrNull(), FrsIcons.Screenshot, Color.White)
+            key == Store.SHORTCUT_FRONT_ROW ->
+                Tile(key, Source.FullResShared, vm.photosFor(Source.FullResShared).firstOrNull(), FrsIcons.Prep, Color.White)
+            key == Store.SHORTCUT_FAVOURITES -> Tile(key, Source.Favorites, favourites.firstOrNull(), Icons.Filled.Star, Color(0xFFFFC107))
+            key.startsWith(Store.SHORTCUT_FOLDER) -> {
+                val id = key.removePrefix(Store.SHORTCUT_FOLDER).toLongOrNull()
+                vm.wallFolders.firstOrNull { it.id == id }?.let { Tile(key, Source.Folder(it.id, it.name), it.cover, null, Color.White) }
+            }
+            else -> null
+        }
+    }
+    val header: (@Composable () -> Unit)? = if (tiles.isEmpty()) null else {
+        {
+            ShortcutRow(tiles, enabled = !selecting, onOpen = vm::open) { keys ->
+                // Shortcuts whose folder is missing have no tile to drag; they keep their place at the end.
+                vm.store.chooseWallShortcuts(keys + vm.store.wallShortcuts.filter { it !in keys })
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             val picked = selection
@@ -137,8 +178,13 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
                         fun item(label: Int, onClick: () -> Unit) =
                             DropdownMenuItem(text = { Text(stringResource(label)) }, onClick = { menu = false; onClick() })
                         item(R.string.favourites) { vm.open(Screen.Collection(Source.Favorites)) }
+                        // Front Row is listed here only when it has no tile on the wall to open it from.
+                        if (Store.SHORTCUT_FRONT_ROW !in vm.store.wallShortcuts) {
+                            item(R.string.fullresshared) { vm.open(Screen.Collection(Source.FullResShared)) }
+                        }
                         if (vm.homeTab == 0) {
                             item(R.string.select_items) { selection = emptySet() }
+                            item(R.string.wall_shortcuts) { choosingShortcuts = true }
                             item(R.string.wall_folders) { choosingFolders = true }
                             item(if (vm.store.wallByFolder) R.string.stop_group_by_folder else R.string.group_by_folder) {
                                 vm.store.chooseWallByFolder(!vm.store.wallByFolder)
@@ -187,19 +233,7 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
                 favorites = vm.store.favorites,
                 modifier = Modifier.padding(top = padding.calculateTopPadding()),
                 bottomPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
-                header = {
-                    Column {
-                        Row(
-                            Modifier.fillMaxWidth().padding(top = 8.dp).alpha(if (selecting) 0.4f else 1f),
-                            horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            // Mirror images of each other: icon outside, thumbnail towards the centre.
-                            Shortcut(Source.Screenshots, FrsIcons.Screenshot, iconFirst = true, vm.photosFor(Source.Screenshots).firstOrNull(), !selecting, vm::open)
-                            Shortcut(Source.FullResShared, FrsIcons.Prep, iconFirst = false, vm.photosFor(Source.FullResShared).firstOrNull(), !selecting, vm::open)
-                        }
-                    }
-                },
+                header = header,
                 headingAction = {
                     SortButton(
                         stringResource(vm.store.photoSort.label),
@@ -275,29 +309,163 @@ fun WallFolderDialog(folders: List<Folder>, hidden: Set<Long>, onDone: (Set<Long
     )
 }
 
+/** The things a wall shortcut can open, as key and name: the three built-in collections, then [folders]. */
 @Composable
-private fun FolderCheck(name: String, count: Int?, checked: Boolean, onToggle: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(onClick = onToggle), verticalAlignment = Alignment.CenterVertically) {
-        Checkbox(checked = checked, onCheckedChange = { onToggle() })
+fun shortcutChoices(folders: List<Folder>): List<Pair<String, String>> = listOf(
+    Store.SHORTCUT_SCREENSHOTS to stringResource(R.string.screenshots),
+    Store.SHORTCUT_FRONT_ROW to stringResource(R.string.fullresshared),
+    Store.SHORTCUT_FAVOURITES to stringResource(R.string.favourites),
+) + folders.map { Store.SHORTCUT_FOLDER + it.id to it.name }
+
+/** Lets the user tick up to [Store.MAX_SHORTCUTS] of [choices] for the tiles above the photo wall, in the order ticked. */
+@Composable
+fun ShortcutsDialog(choices: List<Pair<String, String>>, chosen: List<String>, onDone: (List<String>) -> Unit, onDismiss: () -> Unit) {
+    var picked by remember { mutableStateOf(chosen) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.wall_shortcuts)) },
+        text = {
+            Column {
+                Text(
+                    stringResource(R.string.shortcuts_limit, Store.MAX_SHORTCUTS),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+                LazyColumn {
+                    listItems(choices, key = { it.first }) { (key, name) ->
+                        val on = key in picked
+                        // Once the limit is reached the rest can't be ticked until one is unticked.
+                        FolderCheck(name, null, on, enabled = on || picked.size < Store.MAX_SHORTCUTS) {
+                            picked = if (on) picked - key else picked + key
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onDone(picked) }) { Text(stringResource(R.string.done)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
+    )
+}
+
+@Composable
+private fun FolderCheck(name: String, count: Int?, checked: Boolean, enabled: Boolean = true, onToggle: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(enabled, onClick = onToggle).alpha(if (enabled) 1f else 0.4f),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Checkbox(checked = checked, onCheckedChange = { onToggle() }, enabled = enabled)
         Text(name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (count != null) Text(count.toString(), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 4.dp))
     }
 }
 
-/** A collection's latest photo with the collection's icon beside it; the icon stands in for a text label. */
+/**
+ * One tile above the photo wall; [key] is its entry in the shortcut setting. [icon] null means a folder
+ * the user picked, which is labelled by name instead.
+ */
+private class Tile(val key: String, val source: Source, val cover: Photo?, val icon: ImageVector?, val tint: Color)
+
+private val TileSize = 104.dp
+private val TileGap = 12.dp
+
+/**
+ * The tiles above the photo wall. Holding one picks it up; dragging it sideways moves it past its
+ * neighbours, and [onReorder] gets the new order of keys when it is dropped.
+ */
 @Composable
-private fun Shortcut(source: Source, icon: ImageVector, iconFirst: Boolean, cover: Photo?, enabled: Boolean, onOpen: (Screen) -> Unit) {
-    Row(
-        Modifier.clip(RoundedCornerShape(16.dp)).clickable(enabled) { onOpen(Screen.Collection(source)) }.padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        @Composable
-        fun badge() = Icon(icon, contentDescription = source.title(), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
-        if (iconFirst) badge()
-        val shape = Modifier.size(88.dp).clip(RoundedCornerShape(16.dp))
-        if (cover != null) Thumb(cover, shape) else Box(shape.background(MaterialTheme.colorScheme.surfaceContainer))
-        if (!iconFirst) badge()
+private fun ShortcutRow(tiles: List<Tile>, enabled: Boolean, onOpen: (Screen) -> Unit, onReorder: (List<String>) -> Unit) {
+    val haptics = LocalHapticFeedback.current
+    val base = tiles.map { it.key }
+    val step = with(LocalDensity.current) { (TileSize + TileGap).toPx() }
+    val tilePx = with(LocalDensity.current) { TileSize.toPx() }
+    // Everything about a drag is tied to the order the tiles are laid out in. When a drop changes that
+    // order, this starts again from rest in the same frame, so nothing slides twice.
+    key(base) {
+        /** Where each tile is headed during a drag; the row itself is not re-laid-out until the drop. */
+        var order by remember { mutableStateOf(base) }
+        var dragged by remember { mutableStateOf<String?>(null) }
+        var travelled by remember { mutableFloatStateOf(0f) }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp)
+                .alpha(if (enabled) 1f else 0.4f)
+                .pointerInput(enabled) {
+                    if (!enabled) return@pointerInput
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val press = awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
+                        val count = base.size
+                        // The tiles are centred in the row; find the one under the finger, if any.
+                        val into = press.position.x - (size.width - (count * step - TileGap.toPx())) / 2f
+                        val from = (into / step).toInt()
+                        if (into < 0f || from >= count || into - from * step > tilePx) return@awaitEachGesture
+                        val key = base[from]
+                        dragged = key
+                        travelled = 0f
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+
+                        // Taken in the Initial pass so the wall doesn't scroll under the drag; consuming the
+                        // release also stops the tile from treating it as a tap.
+                        var moved = false
+                        while (true) {
+                            val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == press.id } ?: break
+                            change.consume()
+                            if (!change.pressed) break
+                            travelled = change.position.x - press.position.x
+                            if (kotlin.math.abs(travelled) > viewConfiguration.touchSlop) moved = true
+                            val to = (from + travelled / step).roundToInt().coerceIn(0, count - 1)
+                            if (order.indexOf(key) != to) order = (base - key).toMutableList().apply { add(to, key) }
+                        }
+                        dragged = null
+                        if (moved && order != base) onReorder(order)
+                    }
+                },
+            horizontalArrangement = Arrangement.spacedBy(TileGap, Alignment.CenterHorizontally),
+        ) {
+            tiles.forEachIndexed { index, tile ->
+                // How far this tile's destination is from where it is laid out.
+                val slide by animateFloatAsState((order.indexOf(tile.key) - index) * step, label = "tile")
+                val lifted = dragged == tile.key
+                ShortcutTile(
+                    tile, enabled, onOpen,
+                    Modifier.zIndex(if (lifted) 1f else 0f).graphicsLayer {
+                        translationX = if (lifted) travelled else slide
+                        if (lifted) alpha = 0.85f
+                    },
+                )
+            }
+        }
+    }
+}
+
+/** A collection's latest photo, with a badge inside it saying which collection it is. */
+@Composable
+private fun ShortcutTile(tile: Tile, enabled: Boolean, onOpen: (Screen) -> Unit, modifier: Modifier = Modifier) {
+    val title = tile.source.title()
+    Box(modifier.size(TileSize).clip(RoundedCornerShape(16.dp)).clickable(enabled) { onOpen(Screen.Collection(tile.source)) }) {
+        if (tile.cover != null) Thumb(tile.cover, Modifier.fillMaxSize())
+        else Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainer))
+        val scrim = Color.Black.copy(alpha = 0.6f)
+        if (tile.icon != null) Box(
+            Modifier.align(Alignment.BottomStart).padding(6.dp).size(28.dp).clip(CircleShape).background(scrim),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(tile.icon, contentDescription = title, tint = tile.tint, modifier = Modifier.size(18.dp))
+        } else Text(
+            title,
+            color = Color.White,
+            style = MaterialTheme.typography.labelMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(6.dp)
+                .clip(RoundedCornerShape(50))
+                .background(scrim)
+                .padding(horizontal = 8.dp, vertical = 3.dp),
+        )
     }
 }
 

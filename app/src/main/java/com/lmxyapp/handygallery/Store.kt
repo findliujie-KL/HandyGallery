@@ -106,6 +106,18 @@ class Store private constructor(context: Context) {
         prefs.edit { putBoolean("wallByFolder", on) }
     }
 
+    /**
+     * What the tiles above the photo wall open, in order: "screenshots", "frontrow", "favourites", or
+     * "folder:<bucket id>" for a folder the user picked. At most [MAX_SHORTCUTS].
+     */
+    var wallShortcuts by mutableStateOf((prefs.getString("wallShortcuts", null) ?: DEFAULT_SHORTCUTS).split('|').filter { it.isNotEmpty() })
+        private set
+
+    fun chooseWallShortcuts(keys: List<String>) {
+        wallShortcuts = keys.take(MAX_SHORTCUTS)
+        prefs.edit { putString("wallShortcuts", wallShortcuts.joinToString("|")) }
+    }
+
     fun setFolderHidden(id: Long, hidden: Boolean) {
         hiddenFolders = if (hidden) hiddenFolders + id else hiddenFolders - id
         prefs.edit { putStringSet("hiddenFolders", hiddenFolders.map { it.toString() }.toSet()) }
@@ -157,6 +169,12 @@ class Store private constructor(context: Context) {
 
     companion object {
         const val DEFAULT_GRID_ZOOM = 3
+        const val MAX_SHORTCUTS = 3
+        const val SHORTCUT_SCREENSHOTS = "screenshots"
+        const val SHORTCUT_FRONT_ROW = "frontrow"
+        const val SHORTCUT_FAVOURITES = "favourites"
+        const val SHORTCUT_FOLDER = "folder:"
+        private const val DEFAULT_SHORTCUTS = "$SHORTCUT_SCREENSHOTS|$SHORTCUT_FRONT_ROW|$SHORTCUT_FAVOURITES"
 
         @Volatile
         private var instance: Store? = null

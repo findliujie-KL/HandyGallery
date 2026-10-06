@@ -50,6 +50,17 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     var choosingFolders by remember { mutableStateOf(false) }
+    var choosingShortcuts by remember { mutableStateOf(false) }
+    val shortcutChoices = shortcutChoices(wallFolders)
+    if (choosingShortcuts) ShortcutsDialog(
+        choices = shortcutChoices,
+        chosen = store.wallShortcuts,
+        onDone = {
+            store.chooseWallShortcuts(it)
+            choosingShortcuts = false
+        },
+        onDismiss = { choosingShortcuts = false },
+    )
     if (choosingFolders) WallFolderDialog(
         folders = wallFolders,
         hidden = store.wallHidden,
@@ -112,6 +123,15 @@ fun SettingsScreen(
                 )
             }
             Toggle(stringResource(R.string.group_by_folder), stringResource(R.string.group_by_folder_desc), store.wallByFolder, store::chooseWallByFolder)
+            Column(Modifier.fillMaxWidth().clickable { choosingShortcuts = true }.padding(horizontal = 20.dp, vertical = 10.dp)) {
+                Text(stringResource(R.string.wall_shortcuts), style = MaterialTheme.typography.bodyLarge)
+                val names = store.wallShortcuts.mapNotNull { key -> shortcutChoices.firstOrNull { it.first == key }?.second }
+                Text(
+                    if (names.isEmpty()) stringResource(R.string.shortcuts_none) else names.joinToString(" · "),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             Section(stringResource(R.string.editor))
