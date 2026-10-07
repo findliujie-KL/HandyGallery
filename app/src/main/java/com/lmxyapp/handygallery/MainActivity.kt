@@ -23,6 +23,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -48,6 +51,7 @@ import com.lmxyapp.handygallery.ui.FrsTheme
 import com.lmxyapp.handygallery.ui.HomeScreen
 import com.lmxyapp.handygallery.ui.PhotoActions
 import com.lmxyapp.handygallery.ui.SettingsScreen
+import com.lmxyapp.handygallery.ui.SorterScreen
 import com.lmxyapp.handygallery.ui.isDark
 import com.lmxyapp.handygallery.ui.ViewerScreen
 import com.lmxyapp.handygallery.ui.destinations
@@ -107,6 +111,17 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     fun open(screen: Screen) {
         stack += screen
+    }
+
+    /** Photos the user asked to sort while an earlier session still has decisions waiting; the app asks which to go with. */
+    var sortRequest by mutableStateOf<List<Long>?>(null)
+
+    fun startSort(photos: List<Photo>) {
+        if (photos.isEmpty()) return
+        if (store.sortDecisions.isNotEmpty()) sortRequest = photos.map { it.id } else {
+            store.startSort(photos.map { it.id })
+            open(Screen.Sorter)
+        }
     }
 
     /** Goes straight to [source] with only the home screen behind it, as a direct link does. */
@@ -279,6 +294,55 @@ private fun App(vm: GalleryViewModel) {
         )
     }
 
+    /**
+     * Carries out what was decided in sort mode: the moves first, then the trash, each behind its own
+     * system prompt unless the app may skip them. [done] runs once both have gone through.
+     */
+    fun applySort(moves: List<Pair<Photo, String>>, rejects: List<Photo>, done: () -> Unit) {
+        val moving = moves.filter { (photo, dir) -> Media.relativeDir(photo) != dir }
+        fun trash(moved: Int) {
+            fun finish(trashed: Int) {
+                vm.reload()
+                // Only what actually happened is mentioned; "moved 0" says nothing.
+                when {
+                    moved > 0 && trashed > 0 -> toast(context.getString(R.string.sort_done, moved, trashed))
+                    moved > 0 -> toast(context.getString(R.string.moved_ok, moved))
+                    trashed > 0 -> toast(context.getString(R.string.sort_trashed, trashed))
+                }
+                done()
+            }
+            if (rejects.isEmpty()) finish(0)
+            else withConsent(MediaStore.createTrashRequest(resolver, rejects.map { it.uri }, true)) { finish(rejects.size) }
+        }
+        if (moving.isEmpty()) trash(0)
+        else withConsent(MediaStore.createWriteRequest(resolver, moving.map { it.first.uri })) {
+            runBusy(context.getString(R.string.moving)) {
+                trash(withContext(Dispatchers.IO) { moving.count { (photo, dir) -> Media.moveTo(context, photo, dir) } })
+            }
+        }
+    }
+
+    vm.sortRequest?.let { request ->
+        AlertDialog(
+            onDismissRequest = { vm.sortRequest = null },
+            title = { Text(stringResource(R.string.sort_resume_title)) },
+            text = { Text(stringResource(R.string.sort_resume_text, vm.store.sortDecisions.size)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.sortRequest = null
+                    vm.open(Screen.Sorter)
+                }) { Text(stringResource(R.string.resume)) }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    vm.sortRequest = null
+                    vm.store.startSort(request)
+                    vm.open(Screen.Sorter)
+                }) { Text(stringResource(R.string.start_new)) }
+            },
+        )
+    }
+
     val actions = remember {
         PhotoActions(
             shareFullRes = { photos ->
@@ -327,6 +391,7 @@ private fun App(vm: GalleryViewModel) {
             setFavorite = { photos, favorite -> vm.store.setFavorite(photos.map { it.id }, favorite) },
             move = { photos -> transfer = Transfer(photos, copy = false) },
             copy = { photos -> transfer = Transfer(photos, copy = true) },
+            sort = { photos -> vm.startSort(photos) },
         )
     }
 
@@ -365,6 +430,7 @@ private fun App(vm: GalleryViewModel) {
             )
             is Screen.Collection -> CollectionScreen(vm, screen.source, actions)
             is Screen.Viewer -> Unit
+            Screen.Sorter -> SorterScreen(vm, ::applySort)
             is Screen.Editor -> EditorHost(
                 photo = screen.photo,
                 store = vm.store,

@@ -115,3 +115,20 @@ private fun PickRow(title: String, detail: String?, onClick: () -> Unit, leading
         }
     }
 }
+
+/** Asks for the name of a folder to create inside Pictures; [onCreate] gets the name, already checked. */
+@Composable
+fun NewFolderDialog(onCreate: (String) -> Unit, onDismiss: () -> Unit) {
+    var name by remember { mutableStateOf("") }
+    val clean = name.trim()
+    val valid = clean.isNotEmpty() && clean.none { it in "\\/:*?\"<>|" } && clean != "." && clean != ".."
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.new_folder)) },
+        text = {
+            OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true, label = { Text(stringResource(R.string.folder_name)) })
+        },
+        confirmButton = { TextButton(onClick = { onCreate(clean) }, enabled = valid) { Text(stringResource(R.string.create)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
+    )
+}

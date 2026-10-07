@@ -69,6 +69,11 @@ fun CollectionScreen(vm: GalleryViewModel, source: Source, actions: PhotoActions
                             text = { Text(stringResource(R.string.select_items)) },
                             onClick = { menu = false; selection = emptySet() },
                         )
+                        // Not for the trash, and not for Front Row, which is a list rather than a place to tidy.
+                        if (source != Source.Trash && source != Source.FullResShared && photos.isNotEmpty()) DropdownMenuItem(
+                            text = { Text(stringResource(R.string.sort_mode)) },
+                            onClick = { menu = false; actions.sort(photos) },
+                        )
                     }
                 },
             )

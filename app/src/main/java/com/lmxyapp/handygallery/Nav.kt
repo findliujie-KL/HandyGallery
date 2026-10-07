@@ -26,4 +26,7 @@ sealed interface Screen {
     /** [crop] opens the editor on its crop and rotate screen regardless of the setting. */
     data class Editor(val photo: Photo, val crop: Boolean = false) : Screen
     data object Settings : Screen
+
+    /** Sort mode. What it is going through lives in the Store, so the same session can be picked up later. */
+    data object Sorter : Screen
 }

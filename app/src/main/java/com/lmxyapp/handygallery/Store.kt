@@ -118,6 +118,49 @@ class Store private constructor(context: Context) {
         prefs.edit { putString("wallShortcuts", wallShortcuts.joinToString("|")) }
     }
 
+    /**
+     * Sort mode's session, kept so it survives the app being closed: the photos being gone through in
+     * order, how far the user has got, and what has been decided. A decision is the folder to move the
+     * photo to (a path like "Pictures/Trips/") or [SORT_REJECT]; nothing is done to any file until the
+     * user confirms.
+     */
+    var sortIds by mutableStateOf(prefs.getString("sortIds", "").orEmpty().split(',').mapNotNull { it.toLongOrNull() })
+        private set
+    var sortAt by mutableIntStateOf(prefs.getInt("sortAt", 0))
+        private set
+    var sortDecisions by mutableStateOf(
+        prefs.getStringSet("sortDecisions", emptySet())!!.mapNotNull { entry ->
+            val id = entry.substringBefore('|').toLongOrNull()
+            if (id == null || '|' !in entry) null else id to entry.substringAfter('|')
+        }.toMap(),
+    )
+        private set
+
+    fun startSort(ids: List<Long>) {
+        sortIds = ids
+        sortAt = 0
+        sortDecisions = emptyMap()
+        prefs.edit {
+            putString("sortIds", ids.joinToString(","))
+            putInt("sortAt", 0)
+            remove("sortDecisions")
+        }
+    }
+
+    fun moveSortTo(index: Int) {
+        if (index == sortAt) return
+        sortAt = index
+        prefs.edit { putInt("sortAt", index) }
+    }
+
+    /** Records what to do with a photo; null withdraws the decision. */
+    fun decideSort(id: Long, decision: String?) {
+        sortDecisions = if (decision == null) sortDecisions - id else sortDecisions + (id to decision)
+        prefs.edit { putStringSet("sortDecisions", sortDecisions.map { "${it.key}|${it.value}" }.toSet()) }
+    }
+
+    fun clearSort() = startSort(emptyList())
+
     fun setFolderHidden(id: Long, hidden: Boolean) {
         hiddenFolders = if (hidden) hiddenFolders + id else hiddenFolders - id
         prefs.edit { putStringSet("hiddenFolders", hiddenFolders.map { it.toString() }.toSet()) }
@@ -170,6 +213,9 @@ class Store private constructor(context: Context) {
     companion object {
         const val DEFAULT_GRID_ZOOM = 3
         const val MAX_SHORTCUTS = 3
+
+        /** A sort-mode decision that isn't a folder: the photo is to go to the trash. */
+        const val SORT_REJECT = "*reject"
         const val SHORTCUT_SCREENSHOTS = "screenshots"
         const val SHORTCUT_FRONT_ROW = "frontrow"
         const val SHORTCUT_FAVOURITES = "favourites"

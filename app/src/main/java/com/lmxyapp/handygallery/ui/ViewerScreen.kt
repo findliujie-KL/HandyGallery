@@ -435,13 +435,14 @@ private fun RowScope.BarAction(icon: ImageVector, label: String, onClick: () -> 
 /**
  * One photo: pinch or double-tap to zoom. At normal size a vertical drag is reported through
  * [onVerticalDrag] (pixels moved) and [onVerticalDragEnd], for the viewer to turn into the details
- * sheet or a dismissal. Sideways swipes are left to the pager.
+ * sheet or a dismissal. Sideways swipes are left to the pager, unless [onHorizontalDrag] is given, in
+ * which case they are reported the same way.
  *
  * Only the [active] page reports its zoom through [onZoomed]; a change of [unzoom] asks it to zoom
  * back out, and a page that stops being active resets itself.
  */
 @Composable
-private fun ZoomableImage(
+internal fun ZoomableImage(
     photo: Photo,
     active: Boolean,
     unzoom: Int,
@@ -449,6 +450,8 @@ private fun ZoomableImage(
     onTap: () -> Unit,
     onVerticalDrag: (Float) -> Unit,
     onVerticalDragEnd: () -> Unit,
+    onHorizontalDrag: ((Float) -> Unit)? = null,
+    onHorizontalDragEnd: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val key = photo.cacheKey
@@ -511,6 +514,8 @@ private fun ZoomableImage(
     val tap by rememberUpdatedState(onTap)
     val verticalDrag by rememberUpdatedState(onVerticalDrag)
     val verticalDragEnd by rememberUpdatedState(onVerticalDragEnd)
+    val horizontalDrag by rememberUpdatedState(onHorizontalDrag)
+    val horizontalDragEnd by rememberUpdatedState(onHorizontalDragEnd)
 
     Box(
         Modifier
@@ -521,6 +526,8 @@ private fun ZoomableImage(
                     var travelled = Offset.Zero
                     // Decided once the finger has clearly moved: null until then.
                     var vertical: Boolean? = null
+                    // A sideways drag that this handler reports itself, when the caller asked for those.
+                    var sideways = false
                     do {
                         val event = awaitPointerEvent()
                         if (event.changes.size > 1 || scale > 1f) {
@@ -528,6 +535,8 @@ private fun ZoomableImage(
                             // double-tap animation; the tap's own release arrives here too and must not stop it.
                             if (event.changes.size > 1 || event.changes.any { it.positionChanged() }) zooming?.cancel()
                             if (vertical == true) verticalDragEnd()
+                            if (sideways) horizontalDragEnd()
+                            sideways = false
                             vertical = false
                             scale = (scale * event.calculateZoom()).coerceIn(1f, 8f)
                             val maxX = size.width * (scale - 1) / 2
@@ -541,14 +550,19 @@ private fun ZoomableImage(
                             travelled += step
                             if (vertical == null && travelled.getDistance() > viewConfiguration.touchSlop) {
                                 vertical = abs(travelled.y) > abs(travelled.x)
+                                sideways = vertical == false && horizontalDrag != null
                             }
                             if (vertical == true) {
                                 verticalDrag(step.y)
+                                change.consume()
+                            } else if (sideways) {
+                                horizontalDrag?.invoke(step.x)
                                 change.consume()
                             }
                         }
                     } while (event.changes.any { it.pressed })
                     if (vertical == true) verticalDragEnd()
+                    if (sideways) horizontalDragEnd()
                 }
             }
             .pointerInput(Unit) {
