@@ -114,6 +114,7 @@ fun CollectionScreen(vm: GalleryViewModel, source: Source, actions: PhotoActions
             frontRow = if (source == Source.FullResShared || source == Source.Trash) emptySet() else vm.store.marks.keys,
             favorites = if (source == Source.Favorites || source == Source.Trash) emptySet() else vm.store.favorites,
             leaving = vm.leaving,
+            showExpiry = source == Source.Trash,
             modifier = Modifier.padding(top = padding.calculateTopPadding()),
             bottomPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
         )

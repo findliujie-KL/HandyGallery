@@ -86,6 +86,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.lmxyapp.handygallery.Photo
 import com.lmxyapp.handygallery.PhotoSort
@@ -116,6 +117,7 @@ private sealed interface Wall {
 private val walls = listOf(Wall.Justified(420.dp), Wall.Justified(260.dp), Wall.Justified(150.dp), Wall.Squares(88.dp), Wall.Squares(58.dp))
 
 /** Justified rows are laid out on a grid this many columns wide, each photo spanning its share of them. */
+private const val DayMs = 24 * 60 * 60 * 1000L
 private const val Units = 60
 private val Gap = 2.dp
 
@@ -239,6 +241,8 @@ private fun justify(group: List<Photo>, target: Dp, width: Dp, out: MutableList<
  * Photos whose id is in [frontRow] or [favorites] carry a small badge in a bottom corner. Those in
  * [leaving] have just been removed and fly into the bin button; the rest then close up around the gap.
  *
+ * With [showExpiry] (the trash) each photo shows how many days it has left before it is deleted for good.
+ *
  * Holding a month or folder heading selects everything under it, and in selection mode each heading
  * has a circle that selects or clears its group.
  *
@@ -263,6 +267,7 @@ fun PhotoGrid(
     frontRow: Set<Long> = emptySet(),
     favorites: Set<Long> = emptySet(),
     leaving: Set<Long> = emptySet(),
+    showExpiry: Boolean = false,
 ) = BoxWithConstraints(modifier.clipToBounds()) {
     val density = LocalDensity.current
     val widthPx = constraints.maxWidth.toFloat()
@@ -409,6 +414,8 @@ fun PhotoGrid(
                     frontRow = if (level == walls.lastIndex) emptySet() else frontRow,
                     favorites = if (level == walls.lastIndex) emptySet() else favorites,
                     leaving = leaving,
+                    // Like the other badges, left off at the smallest size.
+                    showExpiry = showExpiry && level != walls.lastIndex,
                     state = stateFor(level),
                     // Only a settled wall takes taps and selections; mid-transition there are two on screen.
                     interactive = incoming == null,
@@ -452,6 +459,7 @@ private fun WallLayer(
     frontRow: Set<Long>,
     favorites: Set<Long>,
     leaving: Set<Long>,
+    showExpiry: Boolean,
     state: LazyGridState,
     interactive: Boolean,
     selection: Set<Long>?,
@@ -596,6 +604,10 @@ private fun WallLayer(
                         PhotoCell(
                             photo, row.height, row.thumb, photo.id in frontRow, photo.id in favorites,
                             selecting = selection != null, selected = selected, enabled = interactive, leaving = photo.id in leaving,
+                            // Rounded up, so a photo with a few hours to go still reads as one day.
+                            daysLeft = if (showExpiry && photo.expires > 0) {
+                                ((photo.expires * 1000 - System.currentTimeMillis() + DayMs - 1) / DayMs).toInt().coerceAtLeast(0)
+                            } else null,
                             // From this cell's middle to the bin button; zero if either can't be placed.
                             toBin = {
                                 val bin = TrashSpot.centre
@@ -814,6 +826,7 @@ private fun PhotoCell(
     selected: Boolean,
     enabled: Boolean,
     leaving: Boolean,
+    daysLeft: Int?,
     toBin: () -> Offset,
     modifier: Modifier,
     onClick: () -> Unit,
@@ -852,6 +865,21 @@ private fun PhotoCell(
         if (favorite) Box(badge.align(Alignment.BottomStart), contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.Star, contentDescription = stringResource(R.string.favourite), tint = Color(0xFFFFC107), modifier = Modifier.size(disc * 0.72f))
         }
+        if (daysLeft != null) Text(
+            stringResource(R.string.days_left, daysLeft),
+            color = Color.White,
+            fontSize = if (height == null) 10.sp else 11.sp,
+            // Set explicitly: the default line height is for body text and would make the pill twice as tall.
+            lineHeight = 14.sp,
+            maxLines = 1,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(inset + 4.dp)
+                .clip(RoundedCornerShape(50))
+                // Red for the last few days, as a warning that it is about to go.
+                .background(if (daysLeft <= 3) Color(0xFFD93025) else Color.Black.copy(alpha = 0.6f))
+                .padding(horizontal = 6.dp, vertical = 1.dp),
+        )
         if (selecting) {
             Box(
                 Modifier
