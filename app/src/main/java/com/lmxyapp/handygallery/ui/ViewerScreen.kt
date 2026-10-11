@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
@@ -45,6 +46,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
@@ -76,7 +78,12 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.lerp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.isUnspecified
 import androidx.compose.ui.graphics.Color
@@ -84,9 +91,11 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.boundsInParent
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.positionChanged
@@ -95,6 +104,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -107,6 +117,7 @@ import com.lmxyapp.handygallery.Source
 import com.lmxyapp.handygallery.share.FileSharer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
@@ -141,14 +152,40 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
             initialPage = photos.indexOfFirst { it.id == screen.currentId }.coerceAtLeast(0),
         ) { photos.size }
     }
-    // The film strip is the one thing that visibly changes, so it fades over to the new set.
-    val stripAlpha = remember { Animatable(1f) }
-    var stripFor by remember { mutableStateOf(screen) }
+    // The photo itself doesn't move, so two things say what happened: the film strip slides down and
+    // away and the new set slides up in its place, and a label names where the photo is now being
+    // seen. [strip] is the screen (and its pager) whose strip is on show, which lags the switch by the
+    // time the old one takes to leave.
+    var strip by remember { mutableStateOf(screen to pager) }
+    val stripAway = remember { Animatable(0f) }
+    val placeLabel = remember { Animatable(0f) }
+    /** Where the photo was being seen before the last switch, for the label's "from" side. */
+    var cameFrom by remember { mutableStateOf(screen.source) }
+    /** 0 while the label's highlight is on the place the photo came from, 1 once it has slid over to where it is now. */
+    val placeSlide = remember { Animatable(0f) }
+    // The top bar's button turns over to its new icon during a switch. Whether one is under way has to
+    // be known in the very frame the screen changes, before the effect below has run, or the button
+    // would show its new icon for a frame and then jump back to the old one to start turning. So it is
+    // worked out from these two rather than from a flag the effect sets: [settled] is the screen whose
+    // switch has finished, and [slideFor] the screen [placeSlide] is currently counting for.
+    var settled by remember { mutableStateOf(screen) }
+    var slideFor by remember { mutableStateOf(screen) }
     LaunchedEffect(screen) {
-        if (screen !== stripFor) {
-            stripFor = screen
-            stripAlpha.snapTo(0f)
-            stripAlpha.animateTo(1f, tween(260))
+        if (screen !== strip.first) {
+            cameFrom = strip.first.source
+            placeSlide.snapTo(0f)
+            slideFor = screen
+            // The label shows first, with the highlight still on where the photo came from.
+            placeLabel.animateTo(1f, tween(140))
+            // Then the highlight crosses to the destination in exactly the time the film strip takes to
+            // slide out and the new one to slide in.
+            launch { placeSlide.animateTo(1f, tween(StripOut + StripIn, easing = FastOutSlowInEasing)) }
+            stripAway.animateTo(1f, tween(StripOut, easing = FastOutSlowInEasing))
+            strip = screen to pager
+            stripAway.animateTo(0f, tween(StripIn, easing = FastOutSlowInEasing))
+            settled = screen
+            delay(900)
+            placeLabel.animateTo(0f, tween(260))
         }
     }
     val current = photos[pager.currentPage.coerceIn(photos.indices)]
@@ -296,15 +333,32 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
                     Box(Modifier.weight(1f))
                     if (!inTrash) {
                         // The same photo, seen from the other side: among its folder's photos, or on the wall.
+                        // During a switch the button's icon turns over like a card, in step with the label and
+                        // the film strip: the old icon turns edge-on, and the new one turns to face.
+                        val turn = if (screen === settled) 1f else if (slideFor === screen) placeSlide.value else 0f
+                        val flip = Modifier.graphicsLayer {
+                            rotationY = if (turn < 0.5f) turn * 180f else (turn - 1f) * 180f
+                            cameraDistance = 12f * this.density
+                        }
+                        // What the button showed before the switch: the wall icon if the photo was in a folder.
+                        val before = if (settled.source is Source.Folder) FrsIcons.Collage else FrsIcons.Folder
                         if (screen.source is Source.Folder) {
                             val wall = vm.photosFor(Source.All)
                             val onWall = remember(current.id, wall) { wall.any { it.id == current.id } }
                             IconButton(onClick = { vm.showOnWall(current) }, enabled = onWall) {
-                                Icon(FrsIcons.Collage, contentDescription = stringResource(if (onWall) R.string.show_on_wall else R.string.not_on_wall))
+                                Icon(
+                                    if (turn < 0.5f) before else FrsIcons.Collage,
+                                    contentDescription = stringResource(if (onWall) R.string.show_on_wall else R.string.not_on_wall),
+                                    modifier = flip,
+                                )
                             }
                         } else {
                             IconButton(onClick = { vm.showInFolder(current) }) {
-                                Icon(FrsIcons.Folder, contentDescription = stringResource(R.string.show_in_folder))
+                                Icon(
+                                    if (turn < 0.5f) before else FrsIcons.Folder,
+                                    contentDescription = stringResource(R.string.show_in_folder),
+                                    modifier = flip,
+                                )
                             }
                         }
                         val favorite = current.id in vm.store.favorites
@@ -344,9 +398,42 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
                         }
                     }
                 }
-                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Scrim).navigationBarsPadding()) {
-                    Box(Modifier.graphicsLayer { alpha = stripAlpha.value }) {
-                        key(screen) { FilmStrip(photos, pager) }
+                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding()) {
+                    // Just above the film strip, for a moment after switching: where the photo was being
+                    // seen, an arrow, and where it is being seen now.
+                    if (placeLabel.value > 0f) {
+                        // Where the two pills sit within the row, so one white highlight can travel between them.
+                        var fromBox by remember { mutableStateOf(Rect.Zero) }
+                        var toBox by remember { mutableStateOf(Rect.Zero) }
+                        Row(
+                            Modifier
+                                .align(Alignment.CenterHorizontally)
+                                .padding(bottom = 10.dp)
+                                .graphicsLayer { alpha = placeLabel.value }
+                                .drawBehind {
+                                    fun pill(box: Rect, color: Color) =
+                                        drawRoundRect(color, box.topLeft, box.size, CornerRadius(box.height / 2f))
+                                    pill(fromBox, Color.Black.copy(alpha = 0.7f))
+                                    pill(toBox, Color.Black.copy(alpha = 0.7f))
+                                    if (!toBox.isEmpty) pill(lerp(fromBox, toBox, placeSlide.value), Color.White)
+                                },
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            // Each name is dark while the highlight is under it and white otherwise.
+                            PlacePill(cameFrom, lerp(Color.Black, Color.White, placeSlide.value), Modifier.onGloballyPositioned { fromBox = it.boundsInParent() })
+                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(20.dp))
+                            PlacePill(screen.source, lerp(Color.White, Color.Black, placeSlide.value), Modifier.onGloballyPositioned { toBox = it.boundsInParent() })
+                        }
+                    }
+                    Column(Modifier.fillMaxWidth().background(Scrim)) {
+                    Box(
+                        Modifier.clipToBounds().graphicsLayer {
+                            translationY = stripAway.value * size.height
+                            alpha = 1f - stripAway.value
+                        },
+                    ) {
+                        key(strip.first) { FilmStrip(vm.photosFor(strip.first.source), strip.second) }
                     }
                     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                         if (inTrash) {
@@ -367,6 +454,7 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
                             BarAction(Icons.Filled.Edit, stringResource(R.string.edit)) { vm.open(Screen.Editor(current)) }
                             BarAction(Icons.Filled.Delete, stringResource(R.string.trash), Modifier.trashSpot(vm.leaving.isNotEmpty())) { actions.trash(listOf(current)) }
                         }
+                    }
                     }
                 }
             }
@@ -439,6 +527,36 @@ private fun FilmStrip(photos: List<Photo>, pager: PagerState) {
                 )
             }
         }
+    }
+}
+
+/** How long the old film strip takes to slide away and the new one to slide in, in milliseconds. */
+private const val StripOut = 300
+private const val StripIn = 400
+
+/** One end of the switch label: a collection's icon and name in [ink]. Its background is drawn by the label itself. */
+@Composable
+private fun PlacePill(source: Source, ink: Color, modifier: Modifier) {
+    val icon = when (source) {
+        is Source.Folder -> FrsIcons.Folder
+        Source.Screenshots -> FrsIcons.Screenshot
+        Source.FullResShared -> FrsIcons.Prep
+        Source.Favorites -> Icons.Filled.Star
+        else -> FrsIcons.Collage
+    }
+    Row(
+        modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, contentDescription = null, tint = ink, modifier = Modifier.size(18.dp))
+        Text(
+            if (source == Source.All) stringResource(R.string.photo_wall) else source.title(),
+            color = ink,
+            fontSize = 14.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 6.dp).widthIn(max = 120.dp),
+        )
     }
 }
 
