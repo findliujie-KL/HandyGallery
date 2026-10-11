@@ -9,8 +9,10 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.MediaStore
 import android.provider.Settings
+import android.text.format.Formatter
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -24,6 +26,7 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -46,7 +49,7 @@ import com.lmxyapp.handygallery.share.FileSharer
 import com.lmxyapp.handygallery.ui.BusyDialog
 import com.lmxyapp.handygallery.ui.CollectionScreen
 import com.lmxyapp.handygallery.ui.EditorHost
-import com.lmxyapp.handygallery.ui.FolderPickerDialog
+import com.lmxyapp.handygallery.ui.FolderPickerSheet
 import com.lmxyapp.handygallery.ui.FrsTheme
 import com.lmxyapp.handygallery.ui.HomeScreen
 import com.lmxyapp.handygallery.ui.PhotoActions
@@ -56,6 +59,7 @@ import com.lmxyapp.handygallery.ui.isDark
 import com.lmxyapp.handygallery.ui.ViewerScreen
 import com.lmxyapp.handygallery.ui.destinations
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -162,11 +166,35 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         focus = photo.id
     }
 
+    /**
+     * Photos that have just been trashed or deleted but are still in the lists: wherever they are shown
+     * they shrink away, and the reload that follows takes them out.
+     */
+    var leaving by mutableStateOf(emptySet<Long>())
+        private set
+
+    /** Until when (elapsed-realtime clock) reloading holds off, so the leaving photos can finish their animation. */
+    private var leavingUntil = 0L
+
+    /** Marks [ids] as leaving and reloads once they have had [millis] on screen to animate out. */
+    fun leave(ids: Set<Long>, millis: Long) {
+        leaving = ids
+        leavingUntil = SystemClock.elapsedRealtime() + millis
+        reload()
+    }
+
     fun reload() {
         canRead = Media.canRead(getApplication())
         viewModelScope.launch {
+            // Coming back from the system's permission prompt resumes the activity, which reloads at once;
+            // without this wait that reload would take the photos away before they had moved at all.
+            val wait = leavingUntil - SystemClock.elapsedRealtime()
+            if (wait > 0) delay(wait)
             photos = Media.load(getApplication(), trashed = false)
-            trashed = Media.load(getApplication(), trashed = true).sortedByDescending { it.dateModified }
+            // Every trashed photo expires the same length of time after it was trashed, so the latest
+            // expiry is the most recently trashed. (Trashing leaves the file's own dates untouched.)
+            trashed = Media.load(getApplication(), trashed = true).sortedWith(compareByDescending<Photo> { it.expires }.thenByDescending { it.id })
+            leaving = emptySet()
             // MediaStore reuses ids, so a mark left behind by a deleted photo would attach itself to a new one.
             if (photos.isNotEmpty()) store.keepOnly((photos + trashed).mapTo(HashSet()) { it.id })
         }
@@ -283,9 +311,12 @@ private fun App(vm: GalleryViewModel) {
     }
 
     transfer?.let { job ->
-        FolderPickerDialog(
+        FolderPickerSheet(
             title = stringResource(if (job.copy) R.string.copy_to_folder else R.string.move_to_folder),
-            choices = remember(vm.wallFolders) { destinations(Media.folders(vm.sorted, FolderSort.NameAsc)) },
+            // The same order as the Folders tab and sort mode, so a folder is always in the same place.
+            choices = remember(vm.sorted, vm.store.folderSort, vm.store.folderOrder) {
+                destinations(Media.folders(vm.sorted, vm.store.folderSort, vm.store.folderOrder))
+            },
             onPick = { dir ->
                 transfer = null
                 if (job.copy) copyInto(job.photos, dir) else moveInto(job.photos, dir)
@@ -343,6 +374,30 @@ private fun App(vm: GalleryViewModel) {
         )
     }
 
+    /** Gives [photos], already gone from storage, a moment to shrink away on screen before the lists are reloaded. */
+    fun removeFromView(photos: List<Photo>) {
+        vm.leave(photos.mapTo(HashSet()) { it.id }, 330)
+    }
+
+    /** Photos waiting for the user to confirm that they should be deleted for good. */
+    var deleting by remember { mutableStateOf<List<Photo>?>(null) }
+    deleting?.let { photos ->
+        AlertDialog(
+            onDismissRequest = { deleting = null },
+            title = { Text(stringResource(R.string.delete_confirm_title)) },
+            text = {
+                Text(stringResource(R.string.delete_confirm_text, photos.size, Formatter.formatShortFileSize(context, photos.sumOf { it.size })))
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    deleting = null
+                    withConsent(MediaStore.createDeleteRequest(resolver, photos.map { it.uri })) { removeFromView(photos) }
+                }) { Text(stringResource(R.string.delete_permanently), color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { deleting = null }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
+
     val actions = remember {
         PhotoActions(
             shareFullRes = { photos ->
@@ -385,9 +440,14 @@ private fun App(vm: GalleryViewModel) {
                     }
                 }
             },
-            trash = { photos -> withConsent(MediaStore.createTrashRequest(resolver, photos.map { it.uri }, true)) { vm.reload() } },
+            trash = { photos -> withConsent(MediaStore.createTrashRequest(resolver, photos.map { it.uri }, true)) { removeFromView(photos) } },
             restore = { photos -> withConsent(MediaStore.createTrashRequest(resolver, photos.map { it.uri }, false)) { vm.reload() } },
-            delete = { photos -> withConsent(MediaStore.createDeleteRequest(resolver, photos.map { it.uri })) { vm.reload() } },
+            delete = { photos ->
+                // When the app may skip the system's prompts, Android asks nothing before deleting for
+                // good, so the app asks instead. Otherwise the system's own question is the confirmation.
+                if (Build.VERSION.SDK_INT >= 31 && MediaStore.canManageMedia(context)) deleting = photos
+                else withConsent(MediaStore.createDeleteRequest(resolver, photos.map { it.uri })) { removeFromView(photos) }
+            },
             setFavorite = { photos, favorite -> vm.store.setFavorite(photos.map { it.id }, favorite) },
             move = { photos -> transfer = Transfer(photos, copy = false) },
             copy = { photos -> transfer = Transfer(photos, copy = true) },

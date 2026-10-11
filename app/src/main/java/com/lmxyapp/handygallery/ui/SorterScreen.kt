@@ -136,6 +136,8 @@ fun SorterScreen(vm: GalleryViewModel, onApply: (List<Pair<Photo, String>>, List
     var flyTo by remember { mutableStateOf(Offset.Zero) }
     val appear = remember { Animatable(1f) }
     var busy by remember { mutableStateOf(false) }
+    /** The id of the photo whose details are showing over it, after a long press; it clears itself when the photo changes. */
+    var infoFor by remember { mutableStateOf<Long?>(null) }
     var area by remember { mutableStateOf(IntSize(1, 1)) }
     var areaCentre by remember { mutableStateOf(Offset.Zero) }
     val tileCentres = remember { mutableStateMapOf<String, Offset>() }
@@ -330,13 +332,26 @@ fun SorterScreen(vm: GalleryViewModel, onApply: (List<Pair<Photo, String>>, List
                                 active = true,
                                 unzoom = 0,
                                 onZoomed = {},
-                                onTap = {},
+                                onTap = { infoFor = null },
                                 onVerticalDrag = ::dragUp,
                                 onVerticalDragEnd = ::release,
                                 onHorizontalDrag = ::dragSideways,
                                 onHorizontalDragEnd = ::release,
+                                onLongPress = { infoFor = current.id },
                             )
                         }
+                    }
+
+                    // Holding the photo shows its details over it; a tap on the panel or the photo puts them away.
+                    if (infoFor == current.id && !busy) Box(
+                        Modifier
+                            .align(Alignment.Center)
+                            .padding(24.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color.Black.copy(alpha = 0.78f))
+                            .clickable { infoFor = null },
+                    ) {
+                        InfoContent(current, Modifier.padding(vertical = 6.dp), bare = true)
                     }
 
                     // What has been decided for this photo, when coming back to it; tapping withdraws it.

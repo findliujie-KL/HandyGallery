@@ -54,6 +54,8 @@ data class Photo(
     /** As displayed, i.e. after applying EXIF orientation. */
     val width: Int,
     val height: Int,
+    /** Seconds; for a photo in the trash, when the system will delete it for good. 0 otherwise. */
+    val expires: Long = 0,
 ) {
     /** Changes whenever the pixels may have, so caches don't serve a stale image after an in-place edit. */
     val cacheKey: String get() = "$id-$dateModified"
@@ -125,6 +127,7 @@ object Media {
             MediaStore.Images.Media.WIDTH,
             MediaStore.Images.Media.HEIGHT,
             MediaStore.Images.Media.ORIENTATION,
+            MediaStore.Images.Media.DATE_EXPIRES,
         )
         val args = Bundle().apply {
             putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, if (trashed) MediaStore.MATCH_ONLY else MediaStore.MATCH_EXCLUDE)
@@ -150,6 +153,7 @@ object Media {
                         size = c.getLong(9),
                         width = c.getInt(if (sideways) 11 else 10),
                         height = c.getInt(if (sideways) 10 else 11),
+                        expires = c.getLong(13),
                     )
                 }
             }

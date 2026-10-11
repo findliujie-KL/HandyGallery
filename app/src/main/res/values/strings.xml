@@ -93,6 +93,8 @@
     <string name="edit">Edit</string>
     <string name="delete">Delete</string>
     <string name="delete_permanently">Delete permanently</string>
+    <string name="delete_confirm_title">Delete permanently?</string>
+    <string name="delete_confirm_text">%1$d photos (%2$s) will be deleted for good. This can’t be undone.</string>
     <string name="move_to_trash">Move to trash</string>
     <string name="restore">Restore</string>
     <string name="favourite">Favourite</string>

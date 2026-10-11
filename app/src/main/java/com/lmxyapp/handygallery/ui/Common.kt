@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.LruCache
 import android.util.Size
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -37,9 +38,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -166,6 +171,24 @@ fun FrontRowButton(alreadyThere: Boolean, onPrep: () -> Unit, onRemove: () -> Un
 }
 
 private val FrontRowTint = Color(0xFF2BBE76)
+
+/**
+ * Where the bin button currently on screen is, in root coordinates, so that photos being trashed or
+ * deleted can fly into it. Whichever bin button is showing (the selection bar's or the viewer's) sets it.
+ */
+object TrashSpot {
+    var centre by mutableStateOf(Offset.Unspecified)
+}
+
+/** Reports this element as the bin photos fly into, and makes it swell a little while [receiving] them. */
+@Composable
+fun Modifier.trashSpot(receiving: Boolean): Modifier {
+    val swell by animateFloatAsState(if (receiving) 1.35f else 1f, label = "bin")
+    return onGloballyPositioned { TrashSpot.centre = it.boundsInRoot().center }.graphicsLayer {
+        scaleX = swell
+        scaleY = swell
+    }
+}
 
 @Composable
 fun EmptyHint(text: String, modifier: Modifier = Modifier, action: @Composable () -> Unit = {}) {

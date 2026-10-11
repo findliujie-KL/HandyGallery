@@ -6,6 +6,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -77,6 +78,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.isUnspecified
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -84,6 +86,8 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.platform.LocalConfiguration
@@ -252,15 +256,33 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
                 },
             ) { page ->
                 val photo = photos.getOrNull(page) ?: return@HorizontalPager
-                ZoomableImage(
-                    photo,
-                    active = page == pager.currentPage,
-                    unzoom = unzoom,
-                    onZoomed = { zoomed = it },
-                    onTap = { if (sheetOpen) closeSheet() else chrome = !chrome },
-                    onVerticalDrag = ::drag,
-                    onVerticalDragEnd = ::settle,
-                )
+                // A photo that has just been trashed or deleted shrinks into the bin button before the next takes its place.
+                val going by animateFloatAsState(if (photo.id in vm.leaving) 1f else 0f, tween(300, easing = FastOutSlowInEasing), label = "leaving")
+                var centre by remember { mutableStateOf(Offset.Zero) }
+                Box(
+                    Modifier.fillMaxSize().onGloballyPositioned { centre = it.boundsInRoot().center }.graphicsLayer {
+                        if (going > 0f) {
+                            val bin = TrashSpot.centre
+                            // Straight down if the bar with the bin is hidden.
+                            val path = if (bin.isUnspecified) Offset(0f, size.height / 2f) else bin - centre
+                            translationX = path.x * going
+                            translationY = path.y * going
+                            scaleX = 1f - 0.92f * going
+                            scaleY = 1f - 0.92f * going
+                            alpha = ((1f - going) / 0.2f).coerceAtMost(1f)
+                        }
+                    },
+                ) {
+                    ZoomableImage(
+                        photo,
+                        active = page == pager.currentPage,
+                        unzoom = unzoom,
+                        onZoomed = { zoomed = it },
+                        onTap = { if (sheetOpen) closeSheet() else chrome = !chrome },
+                        onVerticalDrag = ::drag,
+                        onVerticalDragEnd = ::settle,
+                    )
+                }
             }
 
             if (chrome && pull.value == 0f) CompositionLocalProvider(LocalContentColor provides Color.White) {
@@ -329,7 +351,7 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
                     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                         if (inTrash) {
                             BarAction(Icons.Filled.Refresh, stringResource(R.string.restore)) { actions.restore(listOf(current)) }
-                            BarAction(Icons.Filled.Delete, stringResource(R.string.delete)) { actions.delete(listOf(current)) }
+                            BarAction(Icons.Filled.Delete, stringResource(R.string.delete), Modifier.trashSpot(vm.leaving.isNotEmpty())) { actions.delete(listOf(current)) }
                         } else {
                             var share by remember { mutableStateOf(false) }
                             Box(Modifier.weight(1f)) {
@@ -343,7 +365,7 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
                             }
                             BarAction(FrsIcons.Crop, stringResource(R.string.crop)) { vm.open(Screen.Editor(current, crop = true)) }
                             BarAction(Icons.Filled.Edit, stringResource(R.string.edit)) { vm.open(Screen.Editor(current)) }
-                            BarAction(Icons.Filled.Delete, stringResource(R.string.trash)) { actions.trash(listOf(current)) }
+                            BarAction(Icons.Filled.Delete, stringResource(R.string.trash), Modifier.trashSpot(vm.leaving.isNotEmpty())) { actions.trash(listOf(current)) }
                         }
                     }
                 }
@@ -422,12 +444,12 @@ private fun FilmStrip(photos: List<Photo>, pager: PagerState) {
 
 /** Icon above label, each taking an equal share of the bar; long labels wrap onto further lines. */
 @Composable
-private fun RowScope.BarAction(icon: ImageVector, label: String, onClick: () -> Unit) {
+private fun RowScope.BarAction(icon: ImageVector, label: String, iconModifier: Modifier = Modifier, onClick: () -> Unit) {
     Column(
         Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(vertical = 8.dp, horizontal = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(icon, contentDescription = null)
+        Icon(icon, contentDescription = null, modifier = iconModifier)
         Text(label, fontSize = 12.sp, lineHeight = 14.sp, textAlign = TextAlign.Center, maxLines = 3, modifier = Modifier.padding(top = 4.dp))
     }
 }
@@ -452,6 +474,7 @@ internal fun ZoomableImage(
     onVerticalDragEnd: () -> Unit,
     onHorizontalDrag: ((Float) -> Unit)? = null,
     onHorizontalDragEnd: () -> Unit = {},
+    onLongPress: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val key = photo.cacheKey
@@ -516,6 +539,7 @@ internal fun ZoomableImage(
     val verticalDragEnd by rememberUpdatedState(onVerticalDragEnd)
     val horizontalDrag by rememberUpdatedState(onHorizontalDrag)
     val horizontalDragEnd by rememberUpdatedState(onHorizontalDragEnd)
+    val longPress by rememberUpdatedState(onLongPress)
 
     Box(
         Modifier
@@ -568,6 +592,7 @@ internal fun ZoomableImage(
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { tap() },
+                    onLongPress = { longPress?.invoke() },
                     onDoubleTap = { tapped ->
                         val toScale = if (scale > 1f) 1f else 2.5f
                         // Zooming in keeps the tapped point under the finger, as far as the edges allow.

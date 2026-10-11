@@ -56,23 +56,26 @@ private val infoTags = arrayOf(
     ExifInterface.TAG_FOCAL_LENGTH, ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY, ExifInterface.TAG_USER_COMMENT,
 )
 
-/** A photo's details, laid out for the sheet that slides up over the viewer. */
+/**
+ * A photo's details, laid out for the sheet that slides up over the viewer. [bare] leaves out the
+ * sheet's grab handle and title, for showing the same details as a panel over a photo.
+ */
 @Composable
-fun InfoContent(photo: Photo, modifier: Modifier = Modifier) {
+fun InfoContent(photo: Photo, modifier: Modifier = Modifier, bare: Boolean = false) {
     val context = LocalContext.current
     val exif by produceState(emptyMap<String, String>(), photo.cacheKey) {
         value = withContext(Dispatchers.IO) { Media.readExif(context, photo.uri, infoTags) }
     }
     Column(modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
         // Grab handle: hints that the sheet can be dragged back down.
-        Box(
+        if (!bare) Box(
             Modifier
                 .padding(top = 10.dp, bottom = 4.dp)
                 .size(36.dp, 4.dp)
                 .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(2.dp))
                 .align(Alignment.CenterHorizontally),
         )
-        Text(stringResource(R.string.info), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(vertical = 8.dp))
+        if (!bare) Text(stringResource(R.string.info), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(vertical = 8.dp))
         Entry(photo.bucketName, photo.path.orEmpty())
         Entry(
             DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(photo.time(PhotoSort.Taken))),

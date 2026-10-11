@@ -14,6 +14,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -67,6 +68,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.isUnspecified
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
@@ -75,6 +77,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -83,6 +86,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.lmxyapp.handygallery.Photo
 import com.lmxyapp.handygallery.PhotoSort
 import com.lmxyapp.handygallery.R
@@ -117,7 +121,8 @@ private val Gap = 2.dp
 
 private sealed interface GridRow {
     /** [sub] marks a folder heading inside a month. */
-    data class Header(val key: String, val label: String, val sub: Boolean = false) : GridRow
+    /** [ids] are the photos under this heading, for selecting them all at once. */
+    class Header(val key: String, val label: String, val sub: Boolean = false, val ids: List<Long> = emptyList()) : GridRow
 
     /** [height] null means a square cell. [thumb] is the thumbnail size to load, larger for larger cells. */
     data class Cell(val photo: Photo, val span: Int = 1, val height: Dp? = null, val thumb: Int = 512) : GridRow
@@ -150,18 +155,30 @@ private fun buildRows(
     var last: YearMonth? = null
     var lastBucket = 0L
     var group = ArrayList<Photo>()
+    // Each heading is given the list its photos are then added to as they come.
+    var inMonth = ArrayList<Long>()
+    var inFolder: ArrayList<Long>? = null
     for (photo in photos) {
         val month = YearMonth.from(Instant.ofEpochMilli(photo.time(sort)).atZone(zone))
         val newMonth = month != last
         if (newMonth || (byFolder && photo.bucketId != lastBucket)) {
             addGroup(group)
             group = ArrayList()
-            if (newMonth) rows += GridRow.Header("h$month", monthLabel(month))
-            if (byFolder) rows += GridRow.Header("h$month/${photo.bucketId}", photo.bucketName, sub = true)
+            if (newMonth) {
+                inMonth = ArrayList()
+                rows += GridRow.Header("h$month", monthLabel(month), ids = inMonth)
+            }
+            if (byFolder) {
+                val ids = ArrayList<Long>()
+                inFolder = ids
+                rows += GridRow.Header("h$month/${photo.bucketId}", photo.bucketName, sub = true, ids = ids)
+            }
             last = month
             lastBucket = photo.bucketId
         }
         group += photo
+        inMonth += photo.id
+        inFolder?.add(photo.id)
     }
     addGroup(group)
     return rows
@@ -219,7 +236,11 @@ private fun justify(group: List<Photo>, target: Dp, width: Dp, out: MutableList<
  * [focusId] is a photo to keep in view (the one open in the viewer on top); the wall scrolls to it only
  * when it is off screen.
  *
- * Photos whose id is in [frontRow] or [favorites] carry a small badge in a bottom corner.
+ * Photos whose id is in [frontRow] or [favorites] carry a small badge in a bottom corner. Those in
+ * [leaving] have just been removed and fly into the bin button; the rest then close up around the gap.
+ *
+ * Holding a month or folder heading selects everything under it, and in selection mode each heading
+ * has a circle that selects or clears its group.
  *
  * [selection] null means not in selection mode. Don't give this top content padding: drag hit-testing
  * assumes item offsets start at the grid's own origin.
@@ -241,6 +262,7 @@ fun PhotoGrid(
     focusId: Long? = null,
     frontRow: Set<Long> = emptySet(),
     favorites: Set<Long> = emptySet(),
+    leaving: Set<Long> = emptySet(),
 ) = BoxWithConstraints(modifier.clipToBounds()) {
     val density = LocalDensity.current
     val widthPx = constraints.maxWidth.toFloat()
@@ -386,6 +408,7 @@ fun PhotoGrid(
                     // At the smallest size the badges would cover too much of each thumbnail.
                     frontRow = if (level == walls.lastIndex) emptySet() else frontRow,
                     favorites = if (level == walls.lastIndex) emptySet() else favorites,
+                    leaving = leaving,
                     state = stateFor(level),
                     // Only a settled wall takes taps and selections; mid-transition there are two on screen.
                     interactive = incoming == null,
@@ -428,6 +451,7 @@ private fun WallLayer(
     wall: Wall,
     frontRow: Set<Long>,
     favorites: Set<Long>,
+    leaving: Set<Long>,
     state: LazyGridState,
     interactive: Boolean,
     selection: Set<Long>?,
@@ -485,7 +509,9 @@ private fun WallLayer(
         measureWall(rows, wall, viewport.width.toFloat(), headerCount, density)
     }
 
-    Box(modifier.fillMaxSize()) {
+    /** Where this grid sits on screen, to turn a cell's place in the grid into root coordinates. */
+    var origin by remember { mutableStateOf(Offset.Zero) }
+    Box(modifier.fillMaxSize().onGloballyPositioned { origin = it.positionInRoot() }) {
         LazyVerticalGrid(
             columns = if (wall is Wall.Squares) GridCells.Adaptive(wall.cell) else GridCells.Fixed(Units),
             state = state,
@@ -534,25 +560,53 @@ private fun WallLayer(
                 contentType = { if (rows[it] is GridRow.Header) "header" else "cell" },
             ) { i ->
                 when (val row = rows[i]) {
-                    is GridRow.Header -> if (row.sub) Text(
-                        row.label,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 6.dp),
-                    ) else Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            row.label,
-                            style = MaterialTheme.typography.titleLarge,
-                            modifier = Modifier.weight(1f).padding(start = 16.dp, top = 20.dp, bottom = 10.dp),
-                        )
-                        if (i == firstHeading && headingAction != null) Box(Modifier.padding(top = 10.dp)) { headingAction() }
+                    is GridRow.Header -> {
+                        val chosen = selection.orEmpty()
+                        val all = selection != null && row.ids.isNotEmpty() && chosen.containsAll(row.ids)
+                        Row(
+                            Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null).pointerInput(row, interactive) {
+                                // Holding a heading starts a selection with everything under it.
+                                if (interactive) detectTapGestures(onLongPress = {
+                                    if (currentSelection == null) changeSelection(row.ids.toSet())
+                                })
+                            },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (row.sub) Text(
+                                row.label,
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f).padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 6.dp),
+                            ) else Text(
+                                row.label,
+                                style = MaterialTheme.typography.titleLarge,
+                                modifier = Modifier.weight(1f).padding(start = 16.dp, top = 20.dp, bottom = 10.dp),
+                            )
+                            // While selecting, the circle takes the place of the sort control on the first heading.
+                            if (selection != null) GroupCheck(all, Modifier.padding(end = 10.dp, top = if (row.sub) 0.dp else 10.dp)) {
+                                onSelectionChange(if (all) chosen - row.ids.toSet() else chosen + row.ids)
+                            } else if (!row.sub && i == firstHeading && headingAction != null) Box(Modifier.padding(top = 10.dp)) { headingAction() }
+                        }
                     }
                     is GridRow.Cell -> {
                         val photo = row.photo
                         val selected = selection?.contains(photo.id) == true
-                        PhotoCell(photo, row.height, row.thumb, photo.id in frontRow, photo.id in favorites, selecting = selection != null, selected = selected, enabled = interactive) {
+                        PhotoCell(
+                            photo, row.height, row.thumb, photo.id in frontRow, photo.id in favorites,
+                            selecting = selection != null, selected = selected, enabled = interactive, leaving = photo.id in leaving,
+                            // From this cell's middle to the bin button; zero if either can't be placed.
+                            toBin = {
+                                val bin = TrashSpot.centre
+                                val cell = state.layoutInfo.visibleItemsInfo.firstOrNull { it.key == photo.id }
+                                if (cell == null || bin.isUnspecified) Offset.Zero
+                                else bin - (origin + Offset(cell.offset.x + cell.size.width / 2f, cell.offset.y + cell.size.height / 2f))
+                            },
+                            // Moves smoothly to its new place when photos around it are removed, and is drawn
+                            // over its neighbours while it is the one leaving.
+                            modifier = Modifier.zIndex(if (photo.id in leaving) 1f else 0f).animateItem(fadeInSpec = null, fadeOutSpec = null),
+                        ) {
                             if (selection == null) onOpen(photo)
                             else onSelectionChange(if (selected) selection - photo.id else selection + photo.id)
                         }
@@ -759,12 +813,28 @@ private fun PhotoCell(
     selecting: Boolean,
     selected: Boolean,
     enabled: Boolean,
+    leaving: Boolean,
+    toBin: () -> Offset,
+    modifier: Modifier,
     onClick: () -> Unit,
 ) {
     val inset by animateDpAsState(if (selected) 12.dp else 0.dp, label = "inset")
+    val staying by animateFloatAsState(if (leaving) 0f else 1f, tween(300, easing = FastOutSlowInEasing), label = "leaving")
     val primary = MaterialTheme.colorScheme.primary
     Box(
-        (if (height == null) Modifier.aspectRatio(1f) else Modifier.height(height))
+        modifier
+            .then(if (height == null) Modifier.aspectRatio(1f) else Modifier.height(height))
+            .graphicsLayer {
+                if (staying < 1f) {
+                    // Shrinks along the way to the bin and only fades at the very end.
+                    val path = toBin()
+                    translationX = path.x * (1f - staying)
+                    translationY = path.y * (1f - staying)
+                    scaleX = 0.12f + 0.88f * staying
+                    scaleY = 0.12f + 0.88f * staying
+                    alpha = (staying / 0.2f).coerceAtMost(1f)
+                }
+            }
             .background(if (selected) primary.copy(alpha = 0.18f) else Color.Transparent)
             .clickable(enabled, onClick = onClick),
     ) {
@@ -799,6 +869,29 @@ private fun PhotoCell(
     }
 }
 
+/** The circle on a heading while selecting: filled when everything under the heading is selected. */
+@Composable
+private fun GroupCheck(checked: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val primary = MaterialTheme.colorScheme.primary
+    Box(modifier.size(36.dp).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier
+                .size(22.dp)
+                .clip(CircleShape)
+                .background(if (checked) primary else Color.Transparent)
+                .then(if (checked) Modifier else Modifier.border(2.dp, MaterialTheme.colorScheme.onSurfaceVariant, CircleShape)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (checked) Icon(
+                Icons.Filled.Check,
+                contentDescription = stringResource(R.string.selected),
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+    }
+}
+
 /** Callbacks for acting on a set of photos; shared by the selection bar and the viewer. */
 class PhotoActions(
     val shareFullRes: (List<Photo>) -> Unit,
@@ -820,6 +913,7 @@ class PhotoActions(
  * Top bar shown while selecting: close, count, then the actions for the selected photos.
  * [marked] are the photo ids already in the front row; when everything selected is, the button offers a choice.
  * [favorites] likewise: the star adds the selection to favourites, or removes it when all of it is in already.
+ * [removing] is true while trashed or deleted photos are flying into the bin button.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -830,12 +924,22 @@ fun SelectionTopBar(
     favorites: Set<Long>,
     inTrash: Boolean,
     actions: PhotoActions,
+    removing: Boolean = false,
     onSelectionChange: (Set<Long>?) -> Unit,
 ) {
     /** Hands the selected photos to [action] and leaves selection mode. */
     fun act(action: (List<Photo>) -> Unit) {
         val picked = photos.filter { it.id in selection }
         onSelectionChange(null)
+        if (picked.isNotEmpty()) action(picked)
+    }
+
+    /**
+     * For trash and delete: the bar stays up, because the photos fly into its bin button. The screen
+     * takes them out of the selection once they are really gone, which also ends selection mode.
+     */
+    fun remove(action: (List<Photo>) -> Unit) {
+        val picked = photos.filter { it.id in selection }
         if (picked.isNotEmpty()) action(picked)
     }
     TopAppBar(
@@ -848,7 +952,9 @@ fun SelectionTopBar(
         actions = {
             if (inTrash) {
                 IconButton(onClick = { act(actions.restore) }) { Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.restore)) }
-                IconButton(onClick = { act(actions.delete) }) { Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.delete_permanently)) }
+                IconButton(onClick = { remove(actions.delete) }, modifier = Modifier.trashSpot(removing)) {
+                    Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.delete_permanently))
+                }
             } else {
                 ShareIconButton(onFullRes = { act(actions.shareFullRes) }, onStock = { act(actions.shareStock) })
                 FrontRowButton(
@@ -861,7 +967,9 @@ fun SelectionTopBar(
                     if (allFavorite) Icon(Icons.Filled.Star, contentDescription = stringResource(R.string.unfavourite), tint = Color(0xFFFFC107))
                     else Icon(FrsIcons.StarBorder, contentDescription = stringResource(R.string.favourite))
                 }
-                IconButton(onClick = { act(actions.trash) }) { Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.move_to_trash)) }
+                IconButton(onClick = { remove(actions.trash) }, modifier = Modifier.trashSpot(removing)) {
+                    Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.move_to_trash))
+                }
             }
             var menu by remember { mutableStateOf(false) }
             Box {

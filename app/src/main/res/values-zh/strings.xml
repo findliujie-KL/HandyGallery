@@ -86,6 +86,8 @@
     <string name="edit">编辑</string>
     <string name="delete">删除</string>
     <string name="delete_permanently">永久删除</string>
+    <string name="delete_confirm_title">永久删除？</string>
+    <string name="delete_confirm_text">将永久删除 %1$d 张照片（共 %2$s），此操作无法撤销。</string>
     <string name="move_to_trash">移到回收站</string>
     <string name="restore">恢复</string>
     <string name="favourite">收藏</string>

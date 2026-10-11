@@ -101,6 +101,15 @@ import kotlin.math.roundToInt
 fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission: () -> Unit) {
     val all = vm.photosFor(Source.All)
     var selection by remember { mutableStateOf<Set<Long>?>(null) }
+    // Photos that are trashed or deleted stay selected until they are gone from the list; taking them
+    // out here is what closes selection mode afterwards.
+    LaunchedEffect(all) {
+        val picked = selection ?: return@LaunchedEffect
+        if (picked.isEmpty()) return@LaunchedEffect
+        val present = all.mapTo(HashSet()) { it.id }
+        val kept = picked.filterTo(HashSet()) { it in present }
+        if (kept.size != picked.size) selection = kept.ifEmpty { null }
+    }
     val selecting = selection != null
     BackHandler(selecting) { selection = null }
     var showHidden by remember { mutableStateOf(false) }
@@ -165,7 +174,7 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
     Scaffold(
         topBar = {
             val picked = selection
-            if (picked != null) SelectionTopBar(all, picked, vm.store.marks.keys, vm.store.favorites, inTrash = false, actions) { selection = it }
+            if (picked != null) SelectionTopBar(all, picked, vm.store.marks.keys, vm.store.favorites, inTrash = false, actions, removing = vm.leaving.isNotEmpty()) { selection = it }
             else CenterAlignedTopAppBar(
                 title = { Text(stringResource(R.string.app_name)) },
                 navigationIcon = { AppIcon(Modifier.padding(start = 14.dp)) },
@@ -178,8 +187,11 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
                         @Composable
                         fun item(label: Int, onClick: () -> Unit) =
                             DropdownMenuItem(text = { Text(stringResource(label)) }, onClick = { menu = false; onClick() })
-                        item(R.string.favourites) { vm.open(Screen.Collection(Source.Favorites)) }
-                        // Front Row is listed here only when it has no tile on the wall to open it from.
+                        // Favourites and Front Row are listed here only when there is no tile on the wall to open
+                        // them from. On the Folders tab, Favourites has its card among the folders instead.
+                        if (vm.homeTab == 0 && tiles.none { it.key == Store.SHORTCUT_FAVOURITES }) {
+                            item(R.string.favourites) { vm.open(Screen.Collection(Source.Favorites)) }
+                        }
                         if (tiles.none { it.key == Store.SHORTCUT_FRONT_ROW }) {
                             item(R.string.fullresshared) { vm.open(Screen.Collection(Source.FullResShared)) }
                         }
@@ -233,6 +245,7 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
                 focusId = vm.focus,
                 frontRow = vm.store.marks.keys,
                 favorites = vm.store.favorites,
+                leaving = vm.leaving,
                 modifier = Modifier.padding(top = padding.calculateTopPadding()),
                 bottomPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
                 header = header,

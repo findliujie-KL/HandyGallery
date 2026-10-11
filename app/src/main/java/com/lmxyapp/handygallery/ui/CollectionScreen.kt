@@ -18,6 +18,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,12 +38,21 @@ fun CollectionScreen(vm: GalleryViewModel, source: Source, actions: PhotoActions
     val context = LocalContext.current
     val photos = vm.photosFor(source)
     var selection by remember { mutableStateOf<Set<Long>?>(null) }
+    // Photos that are trashed or deleted stay selected until they are gone from the list; taking them
+    // out here is what closes selection mode afterwards.
+    LaunchedEffect(photos) {
+        val picked = selection ?: return@LaunchedEffect
+        if (picked.isEmpty()) return@LaunchedEffect
+        val present = photos.mapTo(HashSet()) { it.id }
+        val kept = picked.filterTo(HashSet()) { it in present }
+        if (kept.size != picked.size) selection = kept.ifEmpty { null }
+    }
     BackHandler(selection != null) { selection = null }
 
     Scaffold(
         topBar = {
             val picked = selection
-            if (picked != null) SelectionTopBar(photos, picked, vm.store.marks.keys, vm.store.favorites, inTrash = source == Source.Trash, actions) { selection = it }
+            if (picked != null) SelectionTopBar(photos, picked, vm.store.marks.keys, vm.store.favorites, inTrash = source == Source.Trash, actions, removing = vm.leaving.isNotEmpty()) { selection = it }
             else TopAppBar(
                 title = {
                     Column {
@@ -103,6 +113,7 @@ fun CollectionScreen(vm: GalleryViewModel, source: Source, actions: PhotoActions
             // On the Front Row and Favourites pages every photo would carry that page's badge, which says nothing.
             frontRow = if (source == Source.FullResShared || source == Source.Trash) emptySet() else vm.store.marks.keys,
             favorites = if (source == Source.Favorites || source == Source.Trash) emptySet() else vm.store.favorites,
+            leaving = vm.leaving,
             modifier = Modifier.padding(top = padding.calculateTopPadding()),
             bottomPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
         )
