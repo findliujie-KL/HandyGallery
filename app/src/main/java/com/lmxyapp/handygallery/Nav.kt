@@ -29,4 +29,7 @@ sealed interface Screen {
 
     /** Sort mode. What it is going through lives in the Store, so the same session can be picked up later. */
     data object Sorter : Screen
+
+    /** Groups of photos that look alike. */
+    data object Similar : Screen
 }

@@ -54,6 +54,7 @@ import com.lmxyapp.handygallery.ui.FrsTheme
 import com.lmxyapp.handygallery.ui.HomeScreen
 import com.lmxyapp.handygallery.ui.PhotoActions
 import com.lmxyapp.handygallery.ui.SettingsScreen
+import com.lmxyapp.handygallery.ui.SimilarScreen
 import com.lmxyapp.handygallery.ui.SorterScreen
 import com.lmxyapp.handygallery.ui.isDark
 import com.lmxyapp.handygallery.ui.ViewerScreen
@@ -491,6 +492,7 @@ private fun App(vm: GalleryViewModel) {
             is Screen.Collection -> CollectionScreen(vm, screen.source, actions)
             is Screen.Viewer -> Unit
             Screen.Sorter -> SorterScreen(vm, ::applySort)
+            Screen.Similar -> SimilarScreen(vm, actions)
             is Screen.Editor -> EditorHost(
                 photo = screen.photo,
                 store = vm.store,

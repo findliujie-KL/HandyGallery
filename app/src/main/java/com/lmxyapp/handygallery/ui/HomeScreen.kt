@@ -198,6 +198,7 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
                         if (vm.homeTab == 0) {
                             item(R.string.select_items) { selection = emptySet() }
                             item(R.string.sort_mode) { actions.sort(all) }
+                            item(R.string.similar_photos) { vm.open(Screen.Similar) }
                             item(R.string.wall_shortcuts) { choosingShortcuts = true }
                             item(R.string.wall_folders) { choosingFolders = true }
                             item(if (vm.store.wallByFolder) R.string.stop_group_by_folder else R.string.group_by_folder) {

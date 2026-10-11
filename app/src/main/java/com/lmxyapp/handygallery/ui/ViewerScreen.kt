@@ -572,6 +572,12 @@ private fun RowScope.BarAction(icon: ImageVector, label: String, iconModifier: M
     }
 }
 
+/** How far a photo is zoomed in and where it has been panned to. Two photos given the same one zoom and pan together. */
+class ZoomState {
+    val scale = mutableFloatStateOf(1f)
+    val offset = mutableStateOf(Offset.Zero)
+}
+
 /**
  * One photo: pinch or double-tap to zoom. At normal size a vertical drag is reported through
  * [onVerticalDrag] (pixels moved) and [onVerticalDragEnd], for the viewer to turn into the details
@@ -593,6 +599,7 @@ internal fun ZoomableImage(
     onHorizontalDrag: ((Float) -> Unit)? = null,
     onHorizontalDragEnd: () -> Unit = {},
     onLongPress: (() -> Unit)? = null,
+    shared: ZoomState? = null,
 ) {
     val context = LocalContext.current
     val key = photo.cacheKey
@@ -614,7 +621,9 @@ internal fun ZoomableImage(
             runCatching { Media.decode(context, photo.uri, maxEdge = screenEdge).asImageBitmap() }.getOrNull()
         }?.also { screenCache.put(key, it) }
     }
-    var scale by remember { mutableFloatStateOf(1f) }
+    // Its own zoom, unless it has been given one to share with another photo.
+    val zoom = shared ?: remember { ZoomState() }
+    var scale by zoom.scale
     var detail by remember(key) { mutableStateOf<ImageBitmap?>(null) }
     val wantsDetail = scale > 2f && maxOf(photo.width, photo.height) > screenEdge
     LaunchedEffect(key, wantsDetail) {
@@ -623,7 +632,7 @@ internal fun ZoomableImage(
         }
     }
     val bitmap = detail ?: fitted ?: placeholder
-    var offset by remember { mutableStateOf(Offset.Zero) }
+    var offset by zoom.offset
     val scope = rememberCoroutineScope()
     /** The double-tap zoom animation in flight, so a second double-tap or a pinch can take over from it. */
     var zooming by remember { mutableStateOf<Job?>(null) }

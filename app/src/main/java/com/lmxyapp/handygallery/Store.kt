@@ -161,6 +161,18 @@ class Store private constructor(context: Context) {
 
     fun clearSort() = startSort(emptyList())
 
+    /**
+     * Photos the user has looked at among similar ones and chosen to keep all of. A group made up only
+     * of these is settled; if another look-alike joins it later, it comes up for a decision again.
+     */
+    var similarKept by mutableStateOf(prefs.getStringSet("similarKept", emptySet())!!.mapNotNull { it.toLongOrNull() }.toSet())
+        private set
+
+    fun keepSimilar(ids: Collection<Long>, keep: Boolean) {
+        similarKept = if (keep) similarKept + ids else similarKept - ids.toSet()
+        prefs.edit { putStringSet("similarKept", similarKept.map { it.toString() }.toSet()) }
+    }
+
     fun setFolderHidden(id: Long, hidden: Boolean) {
         hiddenFolders = if (hidden) hiddenFolders + id else hiddenFolders - id
         prefs.edit { putStringSet("hiddenFolders", hiddenFolders.map { it.toString() }.toSet()) }
@@ -179,6 +191,7 @@ class Store private constructor(context: Context) {
     fun keepOnly(existing: Set<Long>) {
         if (!existing.containsAll(marks.keys)) saveMarks(marks.filterKeys { it in existing })
         if (!existing.containsAll(favorites)) setFavorite(favorites - existing, false)
+        if (!existing.containsAll(similarKept)) keepSimilar(similarKept - existing, false)
     }
 
     private fun saveMarks(next: Map<Long, Mark>) {
