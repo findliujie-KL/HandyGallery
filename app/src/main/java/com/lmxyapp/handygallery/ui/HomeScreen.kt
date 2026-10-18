@@ -78,6 +78,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -112,39 +113,27 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
     }
     val selecting = selection != null
     BackHandler(selecting) { selection = null }
+    // Picking photos to compare is selecting with a different top bar; it ends with the selection.
+    var picking by remember { mutableStateOf(false) }
+    LaunchedEffect(selecting) { if (!selecting) picking = false }
     var showHidden by remember { mutableStateOf(false) }
-    var choosingFolders by remember { mutableStateOf(false) }
-    var choosingShortcuts by remember { mutableStateOf(false) }
     val hidden = vm.store.hiddenFolders
     val favourites = vm.photosFor(Source.Favorites)
     val favouritesName = stringResource(R.string.favourites)
-    val folders = remember(vm.sorted, vm.store.folderSort, vm.store.folderOrder, favourites, favouritesName) {
-        // Favourites sits among the folders as one more card, as long as there is something in it.
-        val favouritesCard = favourites.maxByOrNull { it.time(PhotoSort.Taken) }?.let { cover ->
-            Folder(Media.FAVORITES_ID, favouritesName, cover, favourites.size, favourites.sumOf { it.size }, cover.time(PhotoSort.Taken))
+    val frontRow = vm.photosFor(Source.FullResShared)
+    val frontRowName = stringResource(R.string.fullresshared)
+    val folders = remember(vm.sorted, vm.store.folderSort, vm.store.folderOrder, favourites, favouritesName, frontRow, frontRowName) {
+        // Favourites and Front Row sit among the folders as cards of their own, as long as there is
+        // something in them. Front Row's cover is the photo most recently put there.
+        fun card(id: Long, name: String, photos: List<Photo>, cover: Photo?) = cover?.let {
+            Folder(id, name, it, photos.size, photos.sumOf { p -> p.size }, it.time(PhotoSort.Taken))
         }
-        Media.folders(vm.sorted, vm.store.folderSort, vm.store.folderOrder, favouritesCard)
+        val cards = listOfNotNull(
+            card(Media.FAVORITES_ID, favouritesName, favourites, favourites.maxByOrNull { it.time(PhotoSort.Taken) }),
+            card(Media.FRONT_ROW_ID, frontRowName, frontRow, frontRow.firstOrNull()),
+        )
+        Media.folders(vm.sorted, vm.store.folderSort, vm.store.folderOrder, cards)
     }
-
-    if (choosingFolders) WallFolderDialog(
-        folders = vm.wallFolders,
-        hidden = vm.store.wallHidden,
-        onDone = {
-            vm.store.chooseWallHidden(it)
-            choosingFolders = false
-        },
-        onDismiss = { choosingFolders = false },
-    )
-
-    if (choosingShortcuts) ShortcutsDialog(
-        choices = shortcutChoices(vm.wallFolders),
-        chosen = vm.store.wallShortcuts,
-        onDone = {
-            vm.store.chooseWallShortcuts(it)
-            choosingShortcuts = false
-        },
-        onDismiss = { choosingShortcuts = false },
-    )
 
     // The tiles above the wall. A folder that has since gone, or a collection with nothing in it yet,
     // leaves its tile out rather than showing an empty one.
@@ -164,9 +153,11 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
     }.filter { it.cover != null }
     val header: (@Composable () -> Unit)? = if (tiles.isEmpty()) null else {
         {
-            ShortcutRow(tiles, enabled = !selecting, onOpen = vm::open) { keys ->
-                // Shortcuts whose folder is missing have no tile to drag; they keep their place at the end.
-                vm.store.chooseWallShortcuts(keys + vm.store.wallShortcuts.filter { it !in keys })
+            TipAnchor(Tips.SHORTCUTS, R.string.tip_shortcuts, enabled = tiles.size > 1) {
+                ShortcutRow(tiles, enabled = !selecting, onOpen = vm::open) { keys ->
+                    // Shortcuts whose folder is missing have no tile to drag; they keep their place at the end.
+                    vm.store.chooseWallShortcuts(keys + vm.store.wallShortcuts.filter { it !in keys })
+                }
             }
         }
     }
@@ -174,42 +165,35 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
     Scaffold(
         topBar = {
             val picked = selection
-            if (picked != null) SelectionTopBar(all, picked, vm.store.marks.keys, vm.store.favorites, inTrash = false, actions, removing = vm.leaving.isNotEmpty()) { selection = it }
+            if (picked != null && picking) PickTopBar(picked.size, onCancel = { selection = null }) {
+                val chosen = all.filter { it.id in picked }
+                selection = null
+                actions.compare(chosen)
+            }
+            else if (picked != null) SelectionTopBar(all, picked, vm.store.marks.keys, vm.store.favorites, inTrash = false, actions, removing = vm.leaving.isNotEmpty()) { selection = it }
             else CenterAlignedTopAppBar(
-                title = { Text(stringResource(R.string.app_name)) },
+                title = {
+                    TipAnchor(Tips.WALL, R.string.tip_wall, enabled = vm.homeTab == 0 && all.isNotEmpty()) { Text(stringResource(R.string.app_name)) }
+                },
                 navigationIcon = { AppIcon(Modifier.padding(start = 14.dp)) },
                 actions = {
-                    var menu by remember { mutableStateOf(false) }
-                    IconButton(onClick = { menu = true }) {
-                        Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.more_options))
+                    TipAnchor(Tips.TOOLS, R.string.tip_tools) {
+                    ToolsButton(
+                        onSort = { actions.sort(all) }.takeIf { all.isNotEmpty() },
+                        onSimilar = { vm.open(Screen.Similar) },
+                        onCompare = {
+                            // Picking happens on the photo wall.
+                            vm.homeTab = 0
+                            picking = true
+                            selection = emptySet()
+                        },
+                    )
                     }
-                    DropdownMenu(menu, { menu = false }) {
-                        @Composable
-                        fun item(label: Int, onClick: () -> Unit) =
-                            DropdownMenuItem(text = { Text(stringResource(label)) }, onClick = { menu = false; onClick() })
-                        // Favourites and Front Row are listed here only when there is no tile on the wall to open
-                        // them from. On the Folders tab, Favourites has its card among the folders instead.
-                        if (vm.homeTab == 0 && tiles.none { it.key == Store.SHORTCUT_FAVOURITES }) {
-                            item(R.string.favourites) { vm.open(Screen.Collection(Source.Favorites)) }
-                        }
-                        if (tiles.none { it.key == Store.SHORTCUT_FRONT_ROW }) {
-                            item(R.string.fullresshared) { vm.open(Screen.Collection(Source.FullResShared)) }
-                        }
-                        if (vm.homeTab == 0) {
-                            item(R.string.select_items) { selection = emptySet() }
-                            item(R.string.sort_mode) { actions.sort(all) }
-                            item(R.string.similar_photos) { vm.open(Screen.Similar) }
-                            item(R.string.wall_shortcuts) { choosingShortcuts = true }
-                            item(R.string.wall_folders) { choosingFolders = true }
-                            item(if (vm.store.wallByFolder) R.string.stop_group_by_folder else R.string.group_by_folder) {
-                                vm.store.chooseWallByFolder(!vm.store.wallByFolder)
-                            }
-                        } else if (hidden.isNotEmpty()) item(if (showHidden) R.string.stop_showing_hidden else R.string.show_hidden) {
-                            showHidden = !showHidden
-                        }
-                        item(R.string.trash) { vm.open(Screen.Collection(Source.Trash)) }
-                        item(R.string.settings) { vm.open(Screen.Settings) }
-                    }
+                    MainMenu(
+                        onHelp = { vm.open(Screen.Help) },
+                        onTrash = { vm.open(Screen.Collection(Source.Trash)) },
+                        onSettings = { vm.open(Screen.Settings) },
+                    )
                 },
             )
         },
@@ -261,6 +245,9 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
             else -> FolderGrid(
                 folders = remember(folders, hidden, showHidden) { folders.filter { showHidden || it.id !in hidden } },
                 hidden = hidden,
+                hiddenCount = folders.count { it.id in hidden },
+                showHidden = showHidden,
+                onShowHidden = { showHidden = it },
                 offWall = vm.store.wallHidden,
                 sortLabel = stringResource(vm.store.folderSort.label),
                 manual = vm.store.folderSort == FolderSort.Manual,
@@ -271,7 +258,15 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
                     vm.store.sortFolders(sort)
                 },
                 onOpen = {
-                    vm.open(Screen.Collection(if (it.id == Media.FAVORITES_ID) Source.Favorites else Source.Folder(it.id, it.name)))
+                    vm.open(
+                        Screen.Collection(
+                            when (it.id) {
+                                Media.FAVORITES_ID -> Source.Favorites
+                                Media.FRONT_ROW_ID -> Source.FullResShared
+                                else -> Source.Folder(it.id, it.name)
+                            },
+                        ),
+                    )
                 },
                 onHide = { folder, hide -> vm.store.setFolderHidden(folder.id, hide) },
                 onWall = { folder, show ->
@@ -522,6 +517,9 @@ private fun SortButton(
 private fun FolderGrid(
     folders: List<Folder>,
     hidden: Set<Long>,
+    hiddenCount: Int,
+    showHidden: Boolean,
+    onShowHidden: (Boolean) -> Unit,
     offWall: Set<Long>,
     sortLabel: String,
     manual: Boolean,
@@ -632,15 +630,19 @@ private fun FolderGrid(
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
-            SortButton(sortLabel, enumValues<FolderSort>().map { stringResource(it.label) }, onPick = onSort)
+            TipAnchor(Tips.FOLDER_ORDER, R.string.tip_folder_order, enabled = manual) {
+                SortButton(sortLabel, enumValues<FolderSort>().map { stringResource(it.label) }, onPick = onSort)
+            }
         }
         items(order, key = { it.id }) { folder ->
             val isHidden = folder.id in hidden
             // Screenshots are never on the wall, whatever the user picks, so that folder gets no choice.
             val favouritesCard = folder.id == Media.FAVORITES_ID
-            val screenshots = !favouritesCard && folder.cover.isScreenshot
-            // Favourites is not a folder, so being on or off the wall doesn't apply to it.
-            val onWallNow = favouritesCard || (!screenshots && folder.id !in offWall)
+            val frontRowCard = folder.id == Media.FRONT_ROW_ID
+            val virtual = favouritesCard || frontRowCard
+            val screenshots = !virtual && folder.cover.isScreenshot
+            // Favourites and Front Row are not folders, so being on or off the wall doesn't apply to them.
+            val onWallNow = virtual || (!screenshots && folder.id !in offWall)
             val lifted = dragged == folder.id
             Column(
                 Modifier
@@ -666,11 +668,12 @@ private fun FolderGrid(
                 Box {
                     Thumb(folder.cover, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(20.dp)))
                     if (!onWallNow) OffWallBadge(Modifier.align(Alignment.TopEnd).padding(8.dp))
-                    if (favouritesCard) Box(
+                    if (virtual) Box(
                         Modifier.align(Alignment.TopStart).padding(8.dp).size(30.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f)),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(Icons.Filled.Star, contentDescription = null, tint = Color(0xFFFFC107), modifier = Modifier.size(20.dp))
+                        if (favouritesCard) Icon(Icons.Filled.Star, contentDescription = null, tint = Color(0xFFFFC107), modifier = Modifier.size(20.dp))
+                        else Icon(FrsIcons.Prep, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                     }
                 }
                 Text(
@@ -691,10 +694,24 @@ private fun FolderGrid(
                         text = { Text(stringResource(if (isHidden) R.string.unhide_folder else R.string.hide_folder)) },
                         onClick = { menuFor = null; onHide(folder, !isHidden) },
                     )
-                    if (!screenshots && !favouritesCard) DropdownMenuItem(
+                    if (!screenshots && !virtual) DropdownMenuItem(
                         text = { Text(stringResource(if (onWallNow) R.string.wall_hide else R.string.wall_show)) },
                         onClick = { menuFor = null; onWall(folder, !onWallNow) },
                     )
+                }
+            }
+        }
+        // Hidden folders are out of the way, but a line at the end says how many there are and brings them back.
+        if (hiddenCount > 0) item(key = "hidden", span = { GridItemSpan(maxLineSpan) }) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    pluralStringResource(R.plurals.hidden_folders, hiddenCount, hiddenCount),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f).padding(start = 2.dp),
+                )
+                TextButton(onClick = { onShowHidden(!showHidden) }) {
+                    Text(stringResource(if (showHidden) R.string.hide_hidden else R.string.show))
                 }
             }
         }

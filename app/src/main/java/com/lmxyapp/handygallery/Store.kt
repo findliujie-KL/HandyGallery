@@ -64,6 +64,29 @@ class Store private constructor(context: Context) {
     var confirmExit by mutableStateOf(prefs.getBoolean("confirmExit", true))
         private set
 
+    /** Whether the first-run walkthrough has been seen (or skipped). */
+    var welcomed by mutableStateOf(prefs.getBoolean("welcomed", false))
+        private set
+
+    fun finishWelcome(done: Boolean = true) {
+        welcomed = done
+        prefs.edit { putBoolean("welcomed", done) }
+    }
+
+    /** The one-time tips already shown; each is shown once, until the user asks for them again. */
+    var seenTips by mutableStateOf(prefs.getStringSet("seenTips", emptySet())!!.toSet())
+        private set
+
+    fun sawTip(id: String) {
+        seenTips = seenTips + id
+        prefs.edit { putStringSet("seenTips", seenTips) }
+    }
+
+    fun resetTips() {
+        seenTips = emptySet()
+        prefs.edit { remove("seenTips") }
+    }
+
     fun chooseStartInCrop(on: Boolean) {
         startInCrop = on
         prefs.edit { putBoolean("startInCrop", on) }

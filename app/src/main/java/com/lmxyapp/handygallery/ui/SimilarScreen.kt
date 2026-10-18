@@ -10,14 +10,16 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -63,9 +65,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import android.content.res.Configuration
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.lmxyapp.handygallery.GalleryViewModel
 import com.lmxyapp.handygallery.Photo
@@ -306,6 +311,36 @@ fun SimilarScreen(vm: GalleryViewModel, actions: PhotoActions) {
     }
 }
 
+/**
+ * Photos the user picked themselves, compared full screen. Unlike similar groups nothing is
+ * suggested: every photo starts as kept, and only the ones marked Remove are trashed.
+ */
+@Composable
+fun CompareScreen(vm: GalleryViewModel, ids: List<Long>, actions: PhotoActions) {
+    val byId = vm.sorted.associateBy { it.id }
+    val group = ids.mapNotNull { byId[it] }
+    if (group.size < 2) {
+        LaunchedEffect(Unit) { vm.back() }
+        return
+    }
+    val removing = remember { mutableStateMapOf<Long, Boolean>() }
+    fun kept(photo: Photo) = removing[photo.id] != true
+    Compare(
+        group = group,
+        start = 0,
+        kept = ::kept,
+        onToggle = { removing[it.id] = kept(it) },
+        onTrash = {
+            val going = group.filter { !kept(it) }
+            vm.back()
+            actions.trash(going)
+        },
+        onKeepAll = vm::back,
+        onClose = vm::back,
+        keepLabel = R.string.compare_done,
+    )
+}
+
 /** The colours and letters that tie each stacked pane to its photo in the strip. */
 private val PaneA = Color(0xFF64B5F6)
 private val PaneB = Color(0xFFFFB74D)
@@ -358,12 +393,16 @@ private fun Compare(
     onTrash: () -> Unit,
     onKeepAll: () -> Unit,
     onClose: () -> Unit,
+    keepLabel: Int? = null,
 ) {
     BackHandler(onBack = onClose)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val going = group.count { !kept(it) }
     var stacked by remember { mutableStateOf(true) }
+    // On a wide screen (the phone on its side, or unfolded) the two panes sit side by side instead.
+    val config = LocalConfiguration.current
+    val wide = config.orientation == Configuration.ORIENTATION_LANDSCAPE || config.screenWidthDp >= 600
     val pager = rememberPagerState(initialPage = start.coerceIn(group.indices)) { group.size }
     // Stacked: which photos are in the two panes, and which pane a tap in the strip fills.
     val zoom = remember { ZoomState() }
@@ -388,7 +427,7 @@ private fun Compare(
                         style = MaterialTheme.typography.titleMedium,
                     )
                     TextButton(onClick = { stacked = !stacked }) {
-                        Text(stringResource(if (stacked) R.string.similar_one_by_one else R.string.similar_stacked))
+                        Text(stringResource(if (stacked) R.string.similar_one_by_one else if (wide) R.string.similar_side_by_side else R.string.similar_stacked))
                     }
                     TextButton(onClick = onTrash, enabled = going > 0) {
                         Text(stringResource(R.string.similar_trash_n, going), color = if (going > 0) MaterialTheme.colorScheme.error else Color.Gray)
@@ -398,13 +437,25 @@ private fun Compare(
                 if (stacked) {
                     val several = group.size > 2
                     // With more than two alike the panes are lettered and coloured, and so are their photos
-                    // in the strip, so it is clear which is above and which below.
-                    Pane(group[top], zoom, kept(group[top]), describe(group[top]), "A".takeIf { several }, PaneA, several && activePane == 0, { activePane = 0 }) { keep ->
-                        if (kept(group[top]) != keep) onToggle(group[top])
+                    // in the strip, so it is clear which pane is which.
+                    val first = @Composable { modifier: Modifier ->
+                        Pane(group[top], zoom, kept(group[top]), describe(group[top]), "A".takeIf { several }, PaneA, several && activePane == 0, modifier, { activePane = 0 }) { keep ->
+                            if (kept(group[top]) != keep) onToggle(group[top])
+                        }
                     }
-                    Box(Modifier.fillMaxWidth().padding(vertical = 1.dp))
-                    Pane(group[bottom], zoom, kept(group[bottom]), describe(group[bottom]), "B".takeIf { several }, PaneB, several && activePane == 1, { activePane = 1 }) { keep ->
-                        if (kept(group[bottom]) != keep) onToggle(group[bottom])
+                    val second = @Composable { modifier: Modifier ->
+                        Pane(group[bottom], zoom, kept(group[bottom]), describe(group[bottom]), "B".takeIf { several }, PaneB, several && activePane == 1, modifier, { activePane = 1 }) { keep ->
+                            if (kept(group[bottom]) != keep) onToggle(group[bottom])
+                        }
+                    }
+                    if (wide) Row(Modifier.weight(1f).fillMaxWidth()) {
+                        first(Modifier.weight(1f).fillMaxHeight())
+                        Box(Modifier.width(2.dp))
+                        second(Modifier.weight(1f).fillMaxHeight())
+                    } else {
+                        first(Modifier.weight(1f).fillMaxWidth())
+                        Box(Modifier.height(2.dp))
+                        second(Modifier.weight(1f).fillMaxWidth())
                     }
                     // The strip chooses which photo goes in the pane that is outlined.
                     if (several) Text(
@@ -486,7 +537,7 @@ private fun Compare(
                     }
                 }
                 TextButton(onClick = onKeepAll, modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 4.dp)) {
-                    Text(stringResource(if (group.size == 2) R.string.similar_keep_both else R.string.similar_keep_all))
+                    Text(stringResource(keepLabel ?: if (group.size == 2) R.string.similar_keep_both else R.string.similar_keep_all))
                 }
             }
         }
@@ -494,13 +545,13 @@ private fun Compare(
 }
 
 /**
- * One of the two stacked photos. It shares [zoom] with the other and shows what sets it apart in a
+ * One of the two photos compared together, stacked or side by side. It shares [zoom] with the other and shows what sets it apart in a
  * corner. Its decision is a pair of buttons, Remove and Keep, with the one in force lit: tapping a
  * button always does what that button says. With [tag] it is lettered in [accent], and [selected]
  * outlines it as the pane the strip will fill.
  */
 @Composable
-private fun ColumnScope.Pane(
+private fun Pane(
     photo: Photo,
     zoom: ZoomState,
     keep: Boolean,
@@ -508,13 +559,12 @@ private fun ColumnScope.Pane(
     tag: String?,
     accent: Color,
     selected: Boolean,
+    modifier: Modifier,
     onSelect: () -> Unit,
     onDecide: (Boolean) -> Unit,
 ) {
     Box(
-        Modifier
-            .weight(1f)
-            .fillMaxWidth()
+        modifier
             .clipToBounds()
             .then(if (selected) Modifier.border(2.5.dp, accent) else Modifier),
     ) {
@@ -526,6 +576,8 @@ private fun ColumnScope.Pane(
             Text(
                 details,
                 style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.6f)).padding(horizontal = 10.dp, vertical = 4.dp),
             )
         }

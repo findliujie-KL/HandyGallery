@@ -16,6 +16,8 @@ import android.provider.OpenableColumns
 import androidx.annotation.StringRes
 import androidx.exifinterface.media.ExifInterface
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.InputStream
@@ -26,6 +28,7 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
+import kotlin.coroutines.resume
 
 enum class PhotoSort(@StringRes val label: Int) { Taken(R.string.sort_taken), Added(R.string.sort_added), Modified(R.string.sort_modified) }
 
@@ -76,6 +79,7 @@ data class Folder(val id: Long, val name: String, val cover: Photo, val count: I
 object Media {
     /** Id of the Favourites entry on the Folders tab, which is a collection rather than a real folder. */
     const val FAVORITES_ID = Long.MIN_VALUE
+    const val FRONT_ROW_ID = Long.MIN_VALUE + 1
 
     val permissions: Array<String>
         get() = buildList {
@@ -191,13 +195,13 @@ object Media {
      * that isn't a real folder (Favourites): it leads the list, except in manual order where it is
      * arranged like any other.
      */
-    fun folders(photos: List<Photo>, sort: FolderSort, order: List<Long> = emptyList(), extra: Folder? = null): List<Folder> {
+    fun folders(photos: List<Photo>, sort: FolderSort, order: List<Long> = emptyList(), extras: List<Folder> = emptyList()): List<Folder> {
         val real = photos.groupBy { it.bucketId }.map { (id, items) ->
             val cover = items.maxBy { it.time(PhotoSort.Taken) }
             Folder(id, cover.bucketName, cover, items.size, items.sumOf { it.size }, cover.time(PhotoSort.Taken))
         }
-        if (extra != null && sort != FolderSort.Manual) return listOf(extra) + folders(photos, sort, order)
-        val folders = if (extra != null) real + extra else real
+        if (extras.isNotEmpty() && sort != FolderSort.Manual) return extras + folders(photos, sort, order)
+        val folders = real + extras
         return when (sort) {
             FolderSort.Recent -> folders.sortedByDescending { it.latest }
             FolderSort.NameAsc -> folders.sortedBy { it.name.lowercase() }
@@ -406,7 +410,10 @@ object Media {
 
     fun canReplace(photo: Photo) = photo.mime in setOf("image/jpeg", "image/png", "image/webp")
 
-    /** Overwrites [photo] with [bitmap] in its own format. Caller must already hold write access. */
+    /**
+     * Overwrites [photo] with [bitmap] in its own format. Caller must already hold write access. A photo
+     * in MediaStore is first kept as it was (see [Originals]), so the edit can be reverted.
+     */
     suspend fun replaceOriginal(context: Context, photo: Photo, bitmap: Bitmap): Unit = withContext(Dispatchers.IO) {
         val format = when (photo.mime) {
             "image/jpeg" -> Bitmap.CompressFormat.JPEG
@@ -415,7 +422,24 @@ object Media {
             else -> error("Replace supports JPEG, PNG and WebP only")
         }
         val exif = readExif(context, photo.uri)
+        val inMediaStore = photo.uri.authority == MediaStore.AUTHORITY
+        if (inMediaStore) Originals.keep(context, photo)
         context.contentResolver.openOutputStream(photo.uri, "wt")!!.use { bitmap.compress(format, 95, it) }
         writeExif(context, photo.uri, exif)
+        if (inMediaStore) rescan(context, photo)
+    }
+
+    /**
+     * Has MediaStore read [photo]'s file again and waits until it has. Until then it reports the old
+     * modification time, size and dimensions, and as the caches are keyed on those, the gallery would go
+     * on showing the photo as it was before it changed.
+     */
+    suspend fun rescan(context: Context, photo: Photo) {
+        val path = photo.path ?: return
+        withTimeoutOrNull(5_000) {
+            suspendCancellableCoroutine { done ->
+                MediaScannerConnection.scanFile(context, arrayOf(path), null) { _, _ -> if (done.isActive) done.resume(Unit) }
+            }
+        }
     }
 }

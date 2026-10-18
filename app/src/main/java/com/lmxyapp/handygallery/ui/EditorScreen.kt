@@ -512,7 +512,9 @@ fun EditorScreen(
                     Box(Modifier.weight(1f))
                     val changed = state != EditState()
                     ExportButton(FrsIcons.SaveCopy, stringResource(R.string.save_copy), changed) { onExport(state, ExportMode.SaveCopy) }
-                    ExportButton(FrsIcons.Replace, stringResource(R.string.replace), changed && canReplace) { onExport(state, ExportMode.ReplaceOriginal) }
+                    TipAnchor(Tips.SAVE, R.string.tip_save, enabled = changed && canReplace) {
+                        ExportButton(FrsIcons.Replace, stringResource(R.string.replace), changed && canReplace) { onExport(state, ExportMode.ReplaceOriginal) }
+                    }
                     ExportButton(FrsIcons.Copy, stringResource(R.string.copy), true) { onExport(state, ExportMode.Clipboard) }
                 }
             }

@@ -48,11 +48,18 @@ fun CollectionScreen(vm: GalleryViewModel, source: Source, actions: PhotoActions
         if (kept.size != picked.size) selection = kept.ifEmpty { null }
     }
     BackHandler(selection != null) { selection = null }
+    var picking by remember { mutableStateOf(false) }
+    LaunchedEffect(selection == null) { if (selection == null) picking = false }
 
     Scaffold(
         topBar = {
             val picked = selection
-            if (picked != null) SelectionTopBar(photos, picked, vm.store.marks.keys, vm.store.favorites, inTrash = source == Source.Trash, actions, removing = vm.leaving.isNotEmpty()) { selection = it }
+            if (picked != null && picking) PickTopBar(picked.size, onCancel = { selection = null }) {
+                val chosen = photos.filter { it.id in picked }
+                selection = null
+                actions.compare(chosen)
+            }
+            else if (picked != null) SelectionTopBar(photos, picked, vm.store.marks.keys, vm.store.favorites, inTrash = source == Source.Trash, actions, removing = vm.leaving.isNotEmpty()) { selection = it }
             else TopAppBar(
                 title = {
                     Column {
@@ -70,21 +77,16 @@ fun CollectionScreen(vm: GalleryViewModel, source: Source, actions: PhotoActions
                     }
                 },
                 actions = {
-                    var menu by remember { mutableStateOf(false) }
-                    IconButton(onClick = { menu = true }) {
-                        Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.more_options))
-                    }
-                    DropdownMenu(menu, { menu = false }) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.select_items)) },
-                            onClick = { menu = false; selection = emptySet() },
-                        )
-                        // Not for the trash, and not for Front Row, which is a list rather than a place to tidy.
-                        if (source != Source.Trash && source != Source.FullResShared && photos.isNotEmpty()) DropdownMenuItem(
-                            text = { Text(stringResource(R.string.sort_mode)) },
-                            onClick = { menu = false; actions.sort(photos) },
-                        )
-                    }
+                    // The tools work on this page's photos: sorting them, or picking among them to compare.
+                    // Not in the trash, and Front Row, a list rather than a place to tidy, isn't sorted.
+                    if (source != Source.Trash) ToolsButton(
+                        onSort = { actions.sort(photos) }.takeIf { source != Source.FullResShared && photos.isNotEmpty() },
+                        onSimilar = { vm.open(Screen.Similar) },
+                        onCompare = {
+                            picking = true
+                            selection = emptySet()
+                        },
+                    )
                 },
             )
         },

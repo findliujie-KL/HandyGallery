@@ -30,6 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -52,6 +53,11 @@ import com.lmxyapp.handygallery.ui.EditorHost
 import com.lmxyapp.handygallery.ui.FolderPickerSheet
 import com.lmxyapp.handygallery.ui.FrsTheme
 import com.lmxyapp.handygallery.ui.HomeScreen
+import com.lmxyapp.handygallery.ui.Tips
+import com.lmxyapp.handygallery.ui.LocalTipsAllowed
+import com.lmxyapp.handygallery.ui.WelcomeScreen
+import com.lmxyapp.handygallery.ui.HelpScreen
+import com.lmxyapp.handygallery.ui.CompareScreen
 import com.lmxyapp.handygallery.ui.PhotoActions
 import com.lmxyapp.handygallery.ui.SettingsScreen
 import com.lmxyapp.handygallery.ui.SimilarScreen
@@ -101,6 +107,9 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     val stack = mutableStateListOf<Screen>(Screen.Home)
     var homeTab by mutableIntStateOf(0)
     var busy by mutableStateOf<String?>(null)
+
+    /** Photos whose edits were saved over them and can be reverted (see [Originals]). */
+    var originals by mutableStateOf(emptySet<Long>())
 
     /** What to do once the user approves the system prompt currently showing. */
     var afterConsent: (() -> Unit)? = null
@@ -197,7 +206,12 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
             trashed = Media.load(getApplication(), trashed = true).sortedWith(compareByDescending<Photo> { it.expires }.thenByDescending { it.id })
             leaving = emptySet()
             // MediaStore reuses ids, so a mark left behind by a deleted photo would attach itself to a new one.
-            if (photos.isNotEmpty()) store.keepOnly((photos + trashed).mapTo(HashSet()) { it.id })
+            if (photos.isNotEmpty()) {
+                val existing = (photos + trashed).mapTo(HashSet()) { it.id }
+                store.keepOnly(existing)
+                Originals.keepOnly(getApplication(), existing)
+            }
+            originals = Originals.ids(getApplication())
         }
     }
 }
@@ -211,6 +225,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // Only a fresh start follows the link; a recreated activity keeps the screen it was on.
         if (savedInstanceState == null) followLink(intent)
+        Tips.store = vm.store
         setContent {
             val dark = isDark(vm.store.theme)
             // System bar icons must contrast with the app's theme, which may differ from the system's.
@@ -453,10 +468,23 @@ private fun App(vm: GalleryViewModel) {
             move = { photos -> transfer = Transfer(photos, copy = false) },
             copy = { photos -> transfer = Transfer(photos, copy = true) },
             sort = { photos -> vm.startSort(photos) },
+            compare = { photos -> vm.open(Screen.Compare(photos.map { it.id })) },
+            revert = { photo ->
+                withConsent(MediaStore.createWriteRequest(resolver, listOf(photo.uri))) {
+                    runBusy(context.getString(R.string.reverting)) {
+                        Originals.restore(context, photo)
+                        // The original may predate its trip to the front row; it goes back there, marker and all.
+                        if (photo.id in vm.store.marks) withContext(Dispatchers.IO) { TopTagger.tag(context, photo) }
+                        vm.reload()
+                        toast(context.getString(R.string.reverted))
+                    }
+                }
+            },
         )
     }
 
-    LaunchedEffect(Unit) { if (!vm.canRead) permissionLauncher.launch(Media.permissions) }
+    // On the very first start the walkthrough comes first, and access to photos is asked for after it.
+    LaunchedEffect(vm.store.welcomed) { if (vm.store.welcomed && !vm.canRead) permissionLauncher.launch(Media.permissions) }
     BackHandler(vm.stack.size > 1, vm::back)
 
     // Both layers live in one Box: taking the viewer away must redraw what is underneath, and a child
@@ -466,51 +494,57 @@ private fun App(vm: GalleryViewModel) {
         // photo away then reveals that screen directly, and the wall keeps its scroll position meanwhile.
         val top = vm.stack.last()
         val base = if (top is Screen.Viewer && vm.stack.size > 1) vm.stack[vm.stack.lastIndex - 1] else top
+        CompositionLocalProvider(LocalTipsAllowed provides (top === base)) {
         when (val screen = base) {
-            Screen.Home -> HomeScreen(
-                vm = vm,
-                actions = actions,
-                onRequestPermission = { permissionLauncher.launch(Media.permissions) },
-            )
-            Screen.Settings -> SettingsScreen(
-                store = vm.store,
-                wallFolders = vm.wallFolders,
-                onBack = vm::back,
-                onLanguage = { tag ->
-                    vm.store.chooseLanguage(tag)
-                    // Resources are bound to the activity's context, so a new language needs a new activity.
-                    (context as? Activity)?.recreate()
-                },
-                onManageMedia = {
-                    if (Build.VERSION.SDK_INT >= 31) {
-                        context.startActivity(
-                            Intent(Settings.ACTION_REQUEST_MANAGE_MEDIA, Uri.parse("package:${context.packageName}")),
-                        )
-                    }
-                },
-            )
-            is Screen.Collection -> CollectionScreen(vm, screen.source, actions)
-            is Screen.Viewer -> Unit
-            Screen.Sorter -> SorterScreen(vm, ::applySort)
-            Screen.Similar -> SimilarScreen(vm, actions)
-            is Screen.Editor -> EditorHost(
-                photo = screen.photo,
-                store = vm.store,
-                directWrite = false,
-                startInCrop = screen.crop || vm.store.startInCrop,
-                onClose = vm::back,
-                onSaved = {
-                    vm.reload()
-                    vm.back()
-                },
-                onDeleted = {
-                    vm.reload()
-                    vm.back()
-                },
-            )
+                Screen.Home -> HomeScreen(
+                    vm = vm,
+                    actions = actions,
+                    onRequestPermission = { permissionLauncher.launch(Media.permissions) },
+                )
+                Screen.Settings -> SettingsScreen(
+                    store = vm.store,
+                    wallFolders = vm.wallFolders,
+                    onBack = vm::back,
+                    onLanguage = { tag ->
+                        vm.store.chooseLanguage(tag)
+                        // Resources are bound to the activity's context, so a new language needs a new activity.
+                        (context as? Activity)?.recreate()
+                    },
+                    onHelp = { vm.open(Screen.Help) },
+                    onManageMedia = {
+                        if (Build.VERSION.SDK_INT >= 31) {
+                            context.startActivity(
+                                Intent(Settings.ACTION_REQUEST_MANAGE_MEDIA, Uri.parse("package:${context.packageName}")),
+                            )
+                        }
+                    },
+                )
+                is Screen.Collection -> CollectionScreen(vm, screen.source, actions)
+                is Screen.Viewer -> Unit
+                Screen.Sorter -> SorterScreen(vm, ::applySort)
+                Screen.Similar -> SimilarScreen(vm, actions)
+                is Screen.Compare -> CompareScreen(vm, screen.ids, actions)
+                Screen.Help -> HelpScreen(vm, actions)
+                is Screen.Editor -> EditorHost(
+                    photo = screen.photo,
+                    store = vm.store,
+                    directWrite = false,
+                    startInCrop = screen.crop || vm.store.startInCrop,
+                    onClose = vm::back,
+                    onSaved = {
+                        vm.reload()
+                        vm.back()
+                    },
+                    onDeleted = {
+                        vm.reload()
+                        vm.back()
+                    },
+                )
+            }
         }
         // The home screen is the only one with a bar along the bottom (Material's navigation bar, 80dp tall).
         if (top is Screen.Viewer) ViewerScreen(vm, top, actions, barBelow = if (base is Screen.Home) 80.dp else 0.dp)
     }
     vm.busy?.let { BusyDialog(it) }
+    if (!vm.store.welcomed) WelcomeScreen { vm.store.finishWelcome() }
 }

@@ -56,6 +56,8 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
@@ -200,6 +202,7 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
     val context = LocalContext.current
     /** The full details page, opened from the menu; swiping up gives the short sheet instead. */
     var details by remember { mutableStateOf(false) }
+    var revert by remember { mutableStateOf<Photo?>(null) }
 
     val appear = remember { Animatable(0f) }
     LaunchedEffect(Unit) { appear.animateTo(1f, tween(160)) }
@@ -342,6 +345,7 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
                         }
                         // What the button showed before the switch: the wall icon if the photo was in a folder.
                         val before = if (settled.source is Source.Folder) FrsIcons.Collage else FrsIcons.Folder
+                        TipAnchor(Tips.SWITCH, R.string.tip_switch, enabled = chrome) {
                         if (screen.source is Source.Folder) {
                             val wall = vm.photosFor(Source.All)
                             val onWall = remember(current.id, wall) { wall.any { it.id == current.id } }
@@ -361,16 +365,19 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
                                 )
                             }
                         }
+                        }
                         val favorite = current.id in vm.store.favorites
                         IconButton(onClick = { actions.setFavorite(listOf(current), !favorite) }) {
                             if (favorite) Icon(Icons.Filled.Star, contentDescription = stringResource(R.string.unfavourite), tint = StarYellow)
                             else Icon(FrsIcons.StarBorder, contentDescription = stringResource(R.string.favourite))
                         }
-                        FrontRowButton(
-                            alreadyThere = current.id in vm.store.marks,
-                            onPrep = { actions.prep(listOf(current)) },
-                            onRemove = { actions.unprep(listOf(current)) },
-                        )
+                        TipAnchor(Tips.FRONT_ROW, R.string.tip_front_row, enabled = chrome) {
+                            FrontRowButton(
+                                alreadyThere = current.id in vm.store.marks,
+                                onPrep = { actions.prep(listOf(current)) },
+                                onRemove = { actions.unprep(listOf(current)) },
+                            )
+                        }
                     }
                     var menu by remember { mutableStateOf(false) }
                     Box {
@@ -393,6 +400,10 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.copy_to_folder)) },
                                     onClick = { menu = false; actions.copy(listOf(current)) },
+                                )
+                                if (current.id in vm.originals) DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.revert_to_original)) },
+                                    onClick = { menu = false; revert = current },
                                 )
                             }
                         }
@@ -477,6 +488,20 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
 
         // Composed last, so it covers the viewer and its Back handler comes before the ones above.
         if (details) DetailsPage(current, vm.store.marks[current.id]?.time) { details = false }
+        revert?.let { photo ->
+            AlertDialog(
+                onDismissRequest = { revert = null },
+                title = { Text(stringResource(R.string.revert_title)) },
+                text = { Text(stringResource(R.string.revert_text)) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        revert = null
+                        actions.revert(photo)
+                    }) { Text(stringResource(R.string.revert)) }
+                },
+                dismissButton = { TextButton(onClick = { revert = null }) { Text(stringResource(R.string.cancel)) } },
+            )
+        }
     }
 }
 
@@ -616,8 +641,11 @@ internal fun ZoomableImage(
             runCatching { context.contentResolver.loadThumbnail(photo.uri, Size(512, 512), null).asImageBitmap() }.getOrNull()
         }
     }
-    val fitted by produceState(screenCache.get(key), key) {
-        if (value == null) value = withContext(Dispatchers.IO) {
+    // Remembered per key, not with produceState, which keeps its old value when the key changes: a photo
+    // edited and saved would go on showing as it was before.
+    var fitted by remember(key) { mutableStateOf(screenCache.get(key)) }
+    LaunchedEffect(key) {
+        if (fitted == null) fitted = withContext(Dispatchers.IO) {
             runCatching { Media.decode(context, photo.uri, maxEdge = screenEdge).asImageBitmap() }.getOrNull()
         }?.also { screenCache.put(key, it) }
     }

@@ -32,4 +32,9 @@ sealed interface Screen {
 
     /** Groups of photos that look alike. */
     data object Similar : Screen
+
+    /** Photos the user picked, side by side or one above the other. */
+    data class Compare(val ids: List<Long>) : Screen
+
+    data object Help : Screen
 }

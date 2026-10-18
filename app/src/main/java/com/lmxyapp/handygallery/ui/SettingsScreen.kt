@@ -1,6 +1,7 @@
 package com.lmxyapp.handygallery.ui
 
 import android.os.Build
+import android.widget.Toast
 import android.provider.MediaStore
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -46,6 +47,7 @@ fun SettingsScreen(
     wallFolders: List<Folder>,
     onBack: () -> Unit,
     onLanguage: (String) -> Unit,
+    onHelp: () -> Unit,
     onManageMedia: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -139,6 +141,15 @@ fun SettingsScreen(
             Toggle(stringResource(R.string.confirm_exit), stringResource(R.string.confirm_exit_desc), store.confirmExit, store::chooseConfirmExit)
 
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            Section(stringResource(R.string.help))
+            Link(stringResource(R.string.help_open), stringResource(R.string.help_open_desc), onHelp)
+            Link(stringResource(R.string.tips_reset), stringResource(R.string.tips_reset_desc)) {
+                store.resetTips()
+                Toast.makeText(context, context.getString(R.string.tips_reset_done), Toast.LENGTH_SHORT).show()
+            }
+            Link(stringResource(R.string.welcome_again), stringResource(R.string.welcome_again_desc)) { store.finishWelcome(false) }
+
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
             val supported = Build.VERSION.SDK_INT >= 31
             val granted = supported && MediaStore.canManageMedia(context)
             Column(Modifier.fillMaxWidth().clickable(supported, onClick = onManageMedia).padding(horizontal = 20.dp, vertical = 14.dp)) {
@@ -156,6 +167,14 @@ fun SettingsScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun Link(title: String, detail: String, onClick: () -> Unit) {
+    Column(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 10.dp)) {
+        Text(title, style = MaterialTheme.typography.bodyLarge)
+        Text(detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

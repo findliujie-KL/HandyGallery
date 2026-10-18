@@ -27,6 +27,7 @@ class EditActivity : ComponentActivity() {
         val style = SystemBarStyle.dark(Color.TRANSPARENT)
         enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
         val store = Store.get(this)
+        com.lmxyapp.handygallery.ui.Tips.store = store
         val photo = Media.photoFor(this, uri, intent.type)
         val directWrite = intent.flags and Intent.FLAG_GRANT_WRITE_URI_PERMISSION != 0
 

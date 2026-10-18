@@ -1,6 +1,7 @@
 package com.lmxyapp.handygallery.ui
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
@@ -8,9 +9,14 @@ import androidx.compose.ui.unit.dp
 
 /** Material icons that aren't in material-icons-core, so we don't pull in the whole extended set. */
 object FrsIcons {
-    private fun icon(name: String, path: String) =
+    /** With [evenOdd], a shape drawn inside another cuts a hole in it, as a picture inside a frame. */
+    private fun icon(name: String, path: String, evenOdd: Boolean = false) =
         ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f)
-            .addPath(addPathNodes(path), fill = SolidColor(Color.Black))
+            .addPath(
+                addPathNodes(path),
+                pathFillType = if (evenOdd) PathFillType.EvenOdd else PathFillType.NonZero,
+                fill = SolidColor(Color.Black),
+            )
             .build()
 
     val StarBorder by lazy {
@@ -84,5 +90,42 @@ object FrsIcons {
     /** "Send to the top": the prep-for-FullResShare action. */
     val Prep by lazy {
         icon("Prep", "M8,11h3v10h2V11h3l-4,-4 -4,4zM4,3v2h16V3H4z")
+    }
+
+    /** A toolbox: the tools menu. */
+    val Toolbox by lazy {
+        icon("Toolbox", "M18,16h-2v-1H8v1H6v-1H2v5h20v-5h-4zM20,8h-3V6c0,-1.1 -0.9,-2 -2,-2H9c-1.1,0 -2,0.9 -2,2v2H4c-1.1,0 -2,0.9 -2,2v4h4v-2h2v2h8v-2h2v2h4v-4c0,-1.1 -0.9,-2 -2,-2zM15,8H9V6h6v2z")
+    }
+    /** A photo with an arrow taking it into a folder: sort mode, filing photos away one by one. */
+    val SortCards by lazy {
+        icon(
+            "SortCards",
+            "M2,2h10v10H2zM4,4v6h6V4z" +
+                "M5,9l2,-2.5 1.5,1.5 1.5,-1.5V9z" +
+                "M13,5.25h4.75v4.25h1.75l-2.5,3 -2.5,-3h1.75V6.75H13z" +
+                "M13,13h3.5l1.5,1.5H21c0.55,0 1,0.45 1,1V21c0,0.55 -0.45,1 -1,1h-8c-0.55,0 -1,-0.45 -1,-1v-7c0,-0.55 0.45,-1 1,-1z",
+            evenOdd = true,
+        )
+    }
+    /**
+     * The same picture twice, one in front of the other: similar photos. Drawn with the outlines going
+     * one way and the holes the other, so the front photo covers the back one instead of cutting into it.
+     */
+    val Similar by lazy {
+        icon(
+            "Similar",
+            "M2,2h12v10H2zM3.5,3.5v7h9v-7z" +
+                "M4.5,9.5l2,-2.5 1.5,1.8 1.2,-1.4 1.8,2.1z" +
+                "M8,9h14v12H8z" +
+                "M9.5,19.5H20.5l-3.2,-3.9 -1.8,2.2 -2.2,-2.8z" +
+                "M18.5,11.2a1.3,1.3 0 1,0 0,2.6a1.3,1.3 0 1,0 0,-2.6z",
+        )
+    }
+    /** A frame split down the middle: compare photos. */
+    val Compare by lazy {
+        icon("Compare", "M10,3H5c-1.1,0 -2,0.9 -2,2v14c0,1.1 0.9,2 2,2h5v2h2V1h-2v2zM10,18H5l5,-6v6zM19,3h-5v2h5v13l-5,-6v9h5c1.1,0 2,-0.9 2,-2V5c0,-1.1 -0.9,-2 -2,-2z")
+    }
+    val Help by lazy {
+        icon("Help", "M11,18h2v-2h-2v2zM12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM12,20c-4.41,0 -8,-3.59 -8,-8s3.59,-8 8,-8 8,3.59 8,8 -3.59,8 -8,8zM12,6c-2.21,0 -4,1.79 -4,4h2c0,-1.1 0.9,-2 2,-2s2,0.9 2,2c0,2 -3,1.75 -3,5h2c0,-2.25 3,-2.5 3,-5 0,-2.21 -1.79,-4 -4,-4z")
     }
 }

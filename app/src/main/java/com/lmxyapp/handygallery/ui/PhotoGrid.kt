@@ -935,6 +935,10 @@ class PhotoActions(
     val copy: (List<Photo>) -> Unit,
     /** Open sort mode on these photos, in this order. */
     val sort: (List<Photo>) -> Unit,
+    /** Undo the edits saved over a photo, putting back its original. */
+    val revert: (Photo) -> Unit,
+    /** Look at these photos together, to choose which to keep. */
+    val compare: (List<Photo>) -> Unit,
 )
 
 /**
@@ -1011,6 +1015,10 @@ fun SelectionTopBar(
                         DropdownMenuItem(text = { Text(stringResource(R.string.move_to_folder)) }, onClick = { menu = false; act(actions.move) })
                         DropdownMenuItem(text = { Text(stringResource(R.string.copy_to_folder)) }, onClick = { menu = false; act(actions.copy) })
                         DropdownMenuItem(text = { Text(stringResource(R.string.sort_mode)) }, onClick = { menu = false; act(actions.sort) })
+                        if (selection.size >= 2) DropdownMenuItem(
+                            text = { Text(stringResource(R.string.compare_photos)) },
+                            onClick = { menu = false; act(actions.compare) },
+                        )
                     }
                 }
             }
