@@ -50,4 +50,6 @@ The APK is written to `app/build/outputs/apk/debug/`. You need JDK 17 or later; 
 
 Copyright 2026 Liu Jie
 
-Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for the full text.
+Handy Gallery is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See [LICENSE](LICENSE) for the full text of the GNU General Public License v3.
