@@ -251,11 +251,11 @@ fun EditorScreen(
                     // Hands the original photo to another editor. This one stays open underneath, so
                     // edits made here are still here to save or discard on the way back.
                     IconButton(onClick = onEditElsewhere) {
-                        Icon(FrsIcons.OpenElsewhere, contentDescription = stringResource(R.string.edit_elsewhere))
+                        Icon(HgIcons.OpenElsewhere, contentDescription = stringResource(R.string.edit_elsewhere))
                     }
-                    IconButton(onClick = { index-- }, enabled = index > 0) { Icon(FrsIcons.Undo, contentDescription = stringResource(R.string.undo)) }
+                    IconButton(onClick = { index-- }, enabled = index > 0) { Icon(HgIcons.Undo, contentDescription = stringResource(R.string.undo)) }
                     IconButton(onClick = { index++ }, enabled = index < history.lastIndex) {
-                        Icon(FrsIcons.Undo, contentDescription = stringResource(R.string.redo), Modifier.graphicsLayer { scaleX = -1f })
+                        Icon(HgIcons.Undo, contentDescription = stringResource(R.string.redo), Modifier.graphicsLayer { scaleX = -1f })
                     }
                 }
 
@@ -471,15 +471,15 @@ fun EditorScreen(
                     }
                     if (tool != null) Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = { erasing = !erasing }) {
-                            Icon(FrsIcons.Eraser, contentDescription = stringResource(R.string.eraser), tint = if (erasing) Accent else Color.White)
+                            Icon(HgIcons.Eraser, contentDescription = stringResource(R.string.eraser), tint = if (erasing) Accent else Color.White)
                         }
                         Box(Modifier.padding(horizontal = 4.dp).width(1.dp).height(20.dp).background(Color.Gray))
                         if (tool == ToolMode.Pen) {
                             val shapes = listOf(
-                                Triple(PenShape.Free, FrsIcons.Brush, R.string.draw),
-                                Triple(PenShape.Arrow, FrsIcons.ArrowShape, R.string.arrow),
-                                Triple(PenShape.Rect, FrsIcons.RectShape, R.string.rectangle),
-                                Triple(PenShape.Oval, FrsIcons.OvalShape, R.string.oval),
+                                Triple(PenShape.Free, HgIcons.Brush, R.string.draw),
+                                Triple(PenShape.Arrow, HgIcons.ArrowShape, R.string.arrow),
+                                Triple(PenShape.Rect, HgIcons.RectShape, R.string.rectangle),
+                                Triple(PenShape.Oval, HgIcons.OvalShape, R.string.oval),
                             )
                             shapes.forEach { (value, icon, label) ->
                                 OptionIcon(icon, stringResource(label), shape == value && !erasing) { shape = value; erasing = false }
@@ -488,8 +488,8 @@ fun EditorScreen(
                             Choice(stringResource(R.string.pixel), !blur && !erasing) { blur = false; erasing = false }
                             Choice(stringResource(R.string.blur), blur && !erasing) { blur = true; erasing = false }
                             Box(Modifier.padding(horizontal = 4.dp).width(1.dp).height(20.dp).background(Color.Gray))
-                            OptionIcon(FrsIcons.Brush, stringResource(R.string.brush), !area && !erasing) { area = false; erasing = false }
-                            OptionIcon(FrsIcons.RectShape, stringResource(R.string.area), area && !erasing) { area = true; erasing = false }
+                            OptionIcon(HgIcons.Brush, stringResource(R.string.brush), !area && !erasing) { area = false; erasing = false }
+                            OptionIcon(HgIcons.RectShape, stringResource(R.string.area), area && !erasing) { area = true; erasing = false }
                         }
                         Box(Modifier.weight(1f))
                         // Each dot is drawn at the width it stands for; mosaic's are wider, so they are shown at half size.
@@ -506,16 +506,16 @@ fun EditorScreen(
                         erasing = false
                     }
                     ToolIcon(Icons.Filled.Edit, stringResource(R.string.draw), tool == ToolMode.Pen) { pick(ToolMode.Pen) }
-                    ToolIcon(FrsIcons.Text, stringResource(R.string.text), false, ::newLabel)
-                    ToolIcon(FrsIcons.Crop, stringResource(R.string.crop_rotate), false) { cropDraft = history[index] }
-                    ToolIcon(FrsIcons.Mosaic, stringResource(R.string.mosaic), tool == ToolMode.Mosaic) { pick(ToolMode.Mosaic) }
+                    ToolIcon(HgIcons.Text, stringResource(R.string.text), false, ::newLabel)
+                    ToolIcon(HgIcons.Crop, stringResource(R.string.crop_rotate), false) { cropDraft = history[index] }
+                    ToolIcon(HgIcons.Mosaic, stringResource(R.string.mosaic), tool == ToolMode.Mosaic) { pick(ToolMode.Mosaic) }
                     Box(Modifier.weight(1f))
                     val changed = state != EditState()
-                    ExportButton(FrsIcons.SaveCopy, stringResource(R.string.save_copy), changed) { onExport(state, ExportMode.SaveCopy) }
+                    ExportButton(HgIcons.SaveCopy, stringResource(R.string.save_copy), changed) { onExport(state, ExportMode.SaveCopy) }
                     TipAnchor(Tips.SAVE, R.string.tip_save, enabled = changed && canReplace) {
-                        ExportButton(FrsIcons.Replace, stringResource(R.string.replace), changed && canReplace) { onExport(state, ExportMode.ReplaceOriginal) }
+                        ExportButton(HgIcons.Replace, stringResource(R.string.replace), changed && canReplace) { onExport(state, ExportMode.ReplaceOriginal) }
                     }
-                    ExportButton(FrsIcons.Copy, stringResource(R.string.copy), true) { onExport(state, ExportMode.Clipboard) }
+                    ExportButton(HgIcons.Copy, stringResource(R.string.copy), true) { onExport(state, ExportMode.Clipboard) }
                 }
             }
 
@@ -660,7 +660,7 @@ private fun TextEntryOverlay(initial: EditItem.Label, onCancel: () -> Unit, onDo
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { boxed = !boxed }) {
                 Icon(
-                    FrsIcons.Text,
+                    HgIcons.Text,
                     contentDescription = stringResource(R.string.text_background),
                     tint = if (boxed) Color.Black else Color.White,
                     modifier = Modifier
@@ -772,7 +772,7 @@ private fun CropPanel(
             for (x in listOf(frame.left, frame.right)) drawLine(Color.White, Offset(x, mid.y - arm / 2), Offset(x, mid.y + arm / 2), thick)
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { onChange(draft.rotated()) }) { Icon(FrsIcons.RotateRight, contentDescription = stringResource(R.string.rotate)) }
+            IconButton(onClick = { onChange(draft.rotated()) }) { Icon(HgIcons.RotateRight, contentDescription = stringResource(R.string.rotate)) }
             Box(Modifier.weight(1f))
             val pristine = draft.turns == 0 && draft.crop == FullCrop
             TextButton(onClick = { onChange(draft.copy(turns = 0, crop = FullCrop)) }, enabled = !pristine) {

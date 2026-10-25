@@ -17,8 +17,8 @@
         android:shortcutId="front_row"
         android:enabled="true"
         android:icon="@drawable/ic_shortcut_front_row"
-        android:shortcutShortLabel="@string/fullresshared"
-        android:shortcutLongLabel="@string/fullresshared">
+        android:shortcutShortLabel="@string/front_row_album"
+        android:shortcutLongLabel="@string/front_row_album">
         <intent
             android:action="android.intent.action.VIEW"
             android:targetPackage="com.lmxyapp.handygallery"

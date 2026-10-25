@@ -11,7 +11,7 @@ sealed interface Source {
     data object Screenshots : Named(R.string.screenshots)
 
     /** Photos this app has stamped with an frs_YYYYMMDDHHmm marker, most recently stamped first. */
-    data object FullResShared : Named(R.string.fullresshared)
+    data object FrontRow : Named(R.string.front_row_album)
     data object Favorites : Named(R.string.favourites)
     data object Trash : Named(R.string.trash)
     data class Folder(val id: Long, val name: String) : Source

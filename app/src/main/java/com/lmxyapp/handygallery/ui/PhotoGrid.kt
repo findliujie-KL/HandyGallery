@@ -860,7 +860,7 @@ private fun PhotoCell(
         val disc = if (height == null) 18.dp else 24.dp
         val badge = Modifier.padding(inset + 4.dp).size(disc).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f))
         if (frontRow) Box(badge.align(Alignment.BottomEnd), contentAlignment = Alignment.Center) {
-            Icon(FrsIcons.Prep, contentDescription = stringResource(R.string.prep), tint = Color.White, modifier = Modifier.size(disc * 0.68f))
+            Icon(HgIcons.Prep, contentDescription = stringResource(R.string.prep), tint = Color.White, modifier = Modifier.size(disc * 0.68f))
         }
         if (favorite) Box(badge.align(Alignment.BottomStart), contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.Star, contentDescription = stringResource(R.string.favourite), tint = Color(0xFFFFC107), modifier = Modifier.size(disc * 0.72f))
@@ -997,7 +997,7 @@ fun SelectionTopBar(
                 val allFavorite = selection.isNotEmpty() && favorites.containsAll(selection)
                 IconButton(onClick = { act { actions.setFavorite(it, !allFavorite) } }) {
                     if (allFavorite) Icon(Icons.Filled.Star, contentDescription = stringResource(R.string.unfavourite), tint = Color(0xFFFFC107))
-                    else Icon(FrsIcons.StarBorder, contentDescription = stringResource(R.string.favourite))
+                    else Icon(HgIcons.StarBorder, contentDescription = stringResource(R.string.favourite))
                 }
                 IconButton(onClick = { remove(actions.trash) }, modifier = Modifier.trashSpot(removing)) {
                     Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.move_to_trash))

@@ -280,7 +280,7 @@ fun SorterScreen(vm: GalleryViewModel, onApply: (List<Pair<Photo, String>>, List
                     }
                     Text("${page + 1} / ${photos.size}", Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.titleMedium)
                     IconButton(onClick = ::undo, enabled = history.isNotEmpty()) {
-                        Icon(FrsIcons.Undo, contentDescription = stringResource(R.string.undo))
+                        Icon(HgIcons.Undo, contentDescription = stringResource(R.string.undo))
                     }
                     TextButton(onClick = { reviewing = true }) { Text(stringResource(R.string.done)) }
                 }
@@ -419,7 +419,7 @@ fun SorterScreen(vm: GalleryViewModel, onApply: (List<Pair<Photo, String>>, List
                         ) {
                             if (target.cover != null) Thumb(target.cover, Modifier.fillMaxSize())
                             else Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-                                Icon(FrsIcons.Folder, contentDescription = null)
+                                Icon(HgIcons.Folder, contentDescription = null)
                             }
                         }
                     }

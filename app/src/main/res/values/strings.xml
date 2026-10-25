@@ -7,7 +7,7 @@
     <string name="photos">Photos</string>
     <string name="folders">Folders</string>
     <string name="screenshots">Screenshots</string>
-    <string name="fullresshared">Images in Front Row</string>
+    <string name="front_row_album">Images in Front Row</string>
     <string name="favourites">Favourites</string>
     <string name="trash">Trash</string>
     <string name="settings">Settings</string>

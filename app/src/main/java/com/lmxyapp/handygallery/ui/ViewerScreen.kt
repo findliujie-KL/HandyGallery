@@ -344,14 +344,14 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
                             cameraDistance = 12f * this.density
                         }
                         // What the button showed before the switch: the wall icon if the photo was in a folder.
-                        val before = if (settled.source is Source.Folder) FrsIcons.Collage else FrsIcons.Folder
+                        val before = if (settled.source is Source.Folder) HgIcons.Collage else HgIcons.Folder
                         TipAnchor(Tips.SWITCH, R.string.tip_switch, enabled = chrome) {
                         if (screen.source is Source.Folder) {
                             val wall = vm.photosFor(Source.All)
                             val onWall = remember(current.id, wall) { wall.any { it.id == current.id } }
                             IconButton(onClick = { vm.showOnWall(current) }, enabled = onWall) {
                                 Icon(
-                                    if (turn < 0.5f) before else FrsIcons.Collage,
+                                    if (turn < 0.5f) before else HgIcons.Collage,
                                     contentDescription = stringResource(if (onWall) R.string.show_on_wall else R.string.not_on_wall),
                                     modifier = flip,
                                 )
@@ -359,7 +359,7 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
                         } else {
                             IconButton(onClick = { vm.showInFolder(current) }) {
                                 Icon(
-                                    if (turn < 0.5f) before else FrsIcons.Folder,
+                                    if (turn < 0.5f) before else HgIcons.Folder,
                                     contentDescription = stringResource(R.string.show_in_folder),
                                     modifier = flip,
                                 )
@@ -369,7 +369,7 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
                         val favorite = current.id in vm.store.favorites
                         IconButton(onClick = { actions.setFavorite(listOf(current), !favorite) }) {
                             if (favorite) Icon(Icons.Filled.Star, contentDescription = stringResource(R.string.unfavourite), tint = StarYellow)
-                            else Icon(FrsIcons.StarBorder, contentDescription = stringResource(R.string.favourite))
+                            else Icon(HgIcons.StarBorder, contentDescription = stringResource(R.string.favourite))
                         }
                         TipAnchor(Tips.FRONT_ROW, R.string.tip_front_row, enabled = chrome) {
                             FrontRowButton(
@@ -461,7 +461,7 @@ fun ViewerScreen(vm: GalleryViewModel, screen: Screen.Viewer, actions: PhotoActi
                                     onEditElsewhere = { FileSharer.editElsewhere(context, current) },
                                 )
                             }
-                            BarAction(FrsIcons.Crop, stringResource(R.string.crop)) { vm.open(Screen.Editor(current, crop = true)) }
+                            BarAction(HgIcons.Crop, stringResource(R.string.crop)) { vm.open(Screen.Editor(current, crop = true)) }
                             BarAction(Icons.Filled.Edit, stringResource(R.string.edit)) { vm.open(Screen.Editor(current)) }
                             BarAction(Icons.Filled.Delete, stringResource(R.string.trash), Modifier.trashSpot(vm.leaving.isNotEmpty())) { actions.trash(listOf(current)) }
                         }
@@ -563,11 +563,11 @@ private const val StripIn = 400
 @Composable
 private fun PlacePill(source: Source, ink: Color, modifier: Modifier) {
     val icon = when (source) {
-        is Source.Folder -> FrsIcons.Folder
-        Source.Screenshots -> FrsIcons.Screenshot
-        Source.FullResShared -> FrsIcons.Prep
+        is Source.Folder -> HgIcons.Folder
+        Source.Screenshots -> HgIcons.Screenshot
+        Source.FrontRow -> HgIcons.Prep
         Source.Favorites -> Icons.Filled.Star
-        else -> FrsIcons.Collage
+        else -> HgIcons.Collage
     }
     Row(
         modifier.padding(horizontal = 12.dp, vertical = 7.dp),

@@ -8,7 +8,7 @@ import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.unit.dp
 
 /** Material icons that aren't in material-icons-core, so we don't pull in the whole extended set. */
-object FrsIcons {
+object HgIcons {
     /** With [evenOdd], a shape drawn inside another cuts a hole in it, as a picture inside a frame. */
     private fun icon(name: String, path: String, evenOdd: Boolean = false) =
         ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f)
@@ -87,7 +87,7 @@ object FrsIcons {
         icon("Screenshot", "M17,1.01L7,1C5.9,1 5,1.9 5,3v18c0,1.1 0.9,2 2,2h10c1.1,0 2,-0.9 2,-2V3C19,1.9 18.1,1.01 17,1.01zM17,18H7V6h10V18zM9.5,8.5H12V7H8v4h1.5V8.5zM12,17h4v-4h-1.5v2.5H12V17z")
     }
 
-    /** "Send to the top": the prep-for-FullResShare action. */
+    /** "Send to the top": the Front Row action. */
     val Prep by lazy {
         icon("Prep", "M8,11h3v10h2V11h3l-4,-4 -4,4zM4,3v2h16V3H4z")
     }

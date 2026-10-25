@@ -25,13 +25,13 @@ import com.lmxyapp.handygallery.Store
 import com.lmxyapp.handygallery.TopTagger
 import com.lmxyapp.handygallery.Trial
 import com.lmxyapp.handygallery.ui.BusyCard
-import com.lmxyapp.handygallery.ui.FrsTheme
+import com.lmxyapp.handygallery.ui.HgTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Share target: preps the shared photos for FullResShare without opening the gallery. Unlike
+ * Share target: puts the shared photos in the Front Row without opening the gallery. Unlike
  * [ReceiveActivity] this changes the photos themselves, so they must be ones in the media library.
  */
 class PrepActivity : ComponentActivity() {
@@ -57,7 +57,7 @@ class PrepActivity : ComponentActivity() {
 
         val store = Store.get(this)
         setContent {
-            FrsTheme(store.theme) {
+            HgTheme(store.theme) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { BusyCard(getString(R.string.writing_marker)) }
             }
         }

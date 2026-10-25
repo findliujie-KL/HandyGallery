@@ -70,8 +70,8 @@ fun WelcomeScreen(onDone: () -> Unit) {
                             horizontalArrangement = Arrangement.SpaceEvenly,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Badge(FrsIcons.Toolbox)
-                            Badge(FrsIcons.Help)
+                            Badge(HgIcons.Toolbox)
+                            Badge(HgIcons.Help)
                         }
                     }
                     Text(

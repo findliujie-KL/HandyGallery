@@ -120,8 +120,8 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
     val hidden = vm.store.hiddenFolders
     val favourites = vm.photosFor(Source.Favorites)
     val favouritesName = stringResource(R.string.favourites)
-    val frontRow = vm.photosFor(Source.FullResShared)
-    val frontRowName = stringResource(R.string.fullresshared)
+    val frontRow = vm.photosFor(Source.FrontRow)
+    val frontRowName = stringResource(R.string.front_row_album)
     val folders = remember(vm.sorted, vm.store.folderSort, vm.store.folderOrder, favourites, favouritesName, frontRow, frontRowName) {
         // Favourites and Front Row sit among the folders as cards of their own, as long as there is
         // something in them. Front Row's cover is the photo most recently put there.
@@ -140,9 +140,9 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
     val tiles = vm.store.wallShortcuts.mapNotNull { key ->
         when {
             key == Store.SHORTCUT_SCREENSHOTS ->
-                Tile(key, Source.Screenshots, vm.photosFor(Source.Screenshots).firstOrNull(), FrsIcons.Screenshot, Color.White)
+                Tile(key, Source.Screenshots, vm.photosFor(Source.Screenshots).firstOrNull(), HgIcons.Screenshot, Color.White)
             key == Store.SHORTCUT_FRONT_ROW ->
-                Tile(key, Source.FullResShared, vm.photosFor(Source.FullResShared).firstOrNull(), FrsIcons.Prep, Color.White)
+                Tile(key, Source.FrontRow, vm.photosFor(Source.FrontRow).firstOrNull(), HgIcons.Prep, Color.White)
             key == Store.SHORTCUT_FAVOURITES -> Tile(key, Source.Favorites, favourites.firstOrNull(), Icons.Filled.Star, Color(0xFFFFC107))
             key.startsWith(Store.SHORTCUT_FOLDER) -> {
                 val id = key.removePrefix(Store.SHORTCUT_FOLDER).toLongOrNull()
@@ -202,13 +202,13 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
                 NavigationBarItem(
                     selected = vm.homeTab == 0,
                     onClick = { vm.homeTab = 0 },
-                    icon = { Icon(FrsIcons.Image, contentDescription = null) },
+                    icon = { Icon(HgIcons.Image, contentDescription = null) },
                     label = { Text(stringResource(R.string.photos)) },
                 )
                 NavigationBarItem(
                     selected = vm.homeTab == 1,
                     onClick = { vm.homeTab = 1 },
-                    icon = { Icon(FrsIcons.Folder, contentDescription = null) },
+                    icon = { Icon(HgIcons.Folder, contentDescription = null) },
                     label = { Text(stringResource(R.string.folders)) },
                 )
             }
@@ -262,7 +262,7 @@ fun HomeScreen(vm: GalleryViewModel, actions: PhotoActions, onRequestPermission:
                         Screen.Collection(
                             when (it.id) {
                                 Media.FAVORITES_ID -> Source.Favorites
-                                Media.FRONT_ROW_ID -> Source.FullResShared
+                                Media.FRONT_ROW_ID -> Source.FrontRow
                                 else -> Source.Folder(it.id, it.name)
                             },
                         ),
@@ -324,7 +324,7 @@ fun WallFolderDialog(folders: List<Folder>, hidden: Set<Long>, onDone: (Set<Long
 @Composable
 fun shortcutChoices(folders: List<Folder>): List<Pair<String, String>> = listOf(
     Store.SHORTCUT_SCREENSHOTS to stringResource(R.string.screenshots),
-    Store.SHORTCUT_FRONT_ROW to stringResource(R.string.fullresshared),
+    Store.SHORTCUT_FRONT_ROW to stringResource(R.string.front_row_album),
     Store.SHORTCUT_FAVOURITES to stringResource(R.string.favourites),
 ) + folders.map { Store.SHORTCUT_FOLDER + it.id to it.name }
 
@@ -494,7 +494,7 @@ private fun SortButton(
         Box {
             TextButton(onClick = { open = true }) {
                 Text(current)
-                Icon(FrsIcons.Sort, contentDescription = stringResource(R.string.change_sort), Modifier.padding(start = 4.dp).size(18.dp))
+                Icon(HgIcons.Sort, contentDescription = stringResource(R.string.change_sort), Modifier.padding(start = 4.dp).size(18.dp))
             }
             DropdownMenu(open, { open = false }) {
                 options.forEachIndexed { i, label ->
@@ -673,7 +673,7 @@ private fun FolderGrid(
                         contentAlignment = Alignment.Center,
                     ) {
                         if (favouritesCard) Icon(Icons.Filled.Star, contentDescription = null, tint = Color(0xFFFFC107), modifier = Modifier.size(20.dp))
-                        else Icon(FrsIcons.Prep, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                        else Icon(HgIcons.Prep, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                     }
                 }
                 Text(
@@ -723,7 +723,7 @@ private fun FolderGrid(
 private fun OffWallBadge(modifier: Modifier = Modifier) {
     Box(modifier.size(30.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f)), contentAlignment = Alignment.Center) {
         Icon(
-            FrsIcons.Image,
+            HgIcons.Image,
             contentDescription = stringResource(R.string.not_on_wall),
             tint = Color.White,
             modifier = Modifier.size(18.dp).drawWithContent {

@@ -10,7 +10,7 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.lmxyapp.handygallery.ui.EditorHost
-import com.lmxyapp.handygallery.ui.FrsTheme
+import com.lmxyapp.handygallery.ui.HgTheme
 
 /** Lets other apps open an image in our editor through the standard "edit" intent. */
 class EditActivity : ComponentActivity() {
@@ -32,7 +32,7 @@ class EditActivity : ComponentActivity() {
         val directWrite = intent.flags and Intent.FLAG_GRANT_WRITE_URI_PERMISSION != 0
 
         setContent {
-            FrsTheme(store.theme) {
+            HgTheme(store.theme) {
                 EditorHost(
                     photo = photo,
                     store = store,

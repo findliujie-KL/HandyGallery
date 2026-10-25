@@ -9,7 +9,7 @@ import androidx.core.content.FileProvider
  *
  * Clipboard images are the exception: paste targets need to see a real image type.
  */
-class FrsFileProvider : FileProvider() {
+class HgFileProvider : FileProvider() {
     override fun getType(uri: Uri): String = when {
         uri.pathSegments.firstOrNull() == "clip" -> FileSharer.MIME_CLIP
         uri.lastPathSegment?.endsWith(".zip", ignoreCase = true) == true -> FileSharer.MIME_ZIP

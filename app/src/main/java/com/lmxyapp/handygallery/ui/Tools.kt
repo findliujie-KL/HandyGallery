@@ -37,7 +37,7 @@ import com.lmxyapp.handygallery.R
 fun ToolsButton(onSort: (() -> Unit)?, onSimilar: () -> Unit, onCompare: () -> Unit, modifier: Modifier = Modifier) {
     var open by remember { mutableStateOf(false) }
     Box(modifier) {
-        IconButton(onClick = { open = true }) { Icon(FrsIcons.Toolbox, contentDescription = stringResource(R.string.tools)) }
+        IconButton(onClick = { open = true }) { Icon(HgIcons.Toolbox, contentDescription = stringResource(R.string.tools)) }
         DropdownMenu(open, { open = false }) {
             @Composable
             fun tool(icon: ImageVector, title: Int, detail: Int, onClick: () -> Unit) = DropdownMenuItem(
@@ -54,9 +54,9 @@ fun ToolsButton(onSort: (() -> Unit)?, onSimilar: () -> Unit, onCompare: () -> U
                 },
                 onClick = { open = false; onClick() },
             )
-            if (onSort != null) tool(FrsIcons.SortCards, R.string.sort_mode, R.string.tool_sort_desc, onSort)
-            tool(FrsIcons.Similar, R.string.similar_photos, R.string.tool_similar_desc, onSimilar)
-            tool(FrsIcons.Compare, R.string.compare_photos, R.string.tool_compare_desc, onCompare)
+            if (onSort != null) tool(HgIcons.SortCards, R.string.sort_mode, R.string.tool_sort_desc, onSort)
+            tool(HgIcons.Similar, R.string.similar_photos, R.string.tool_similar_desc, onSimilar)
+            tool(HgIcons.Compare, R.string.compare_photos, R.string.tool_compare_desc, onCompare)
         }
     }
 }
@@ -76,7 +76,7 @@ fun MainMenu(onHelp: () -> Unit, onTrash: () -> Unit, onSettings: () -> Unit) {
                 text = { Text(stringResource(label)) },
                 onClick = { open = false; onClick() },
             )
-            item(FrsIcons.Help, R.string.help, onHelp)
+            item(HgIcons.Help, R.string.help, onHelp)
             item(Icons.Filled.Delete, R.string.trash, onTrash)
             item(Icons.Filled.Settings, R.string.settings, onSettings)
         }

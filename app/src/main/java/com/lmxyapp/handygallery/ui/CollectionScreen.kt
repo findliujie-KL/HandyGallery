@@ -31,7 +31,7 @@ import com.lmxyapp.handygallery.R
 import com.lmxyapp.handygallery.Screen
 import com.lmxyapp.handygallery.Source
 
-/** One collection (a folder, Screenshots, FullResShared, Favourites or Trash) as a photo grid. */
+/** One collection (a folder, Screenshots, FrontRow, Favourites or Trash) as a photo grid. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CollectionScreen(vm: GalleryViewModel, source: Source, actions: PhotoActions) {
@@ -80,7 +80,7 @@ fun CollectionScreen(vm: GalleryViewModel, source: Source, actions: PhotoActions
                     // The tools work on this page's photos: sorting them, or picking among them to compare.
                     // Not in the trash, and Front Row, a list rather than a place to tidy, isn't sorted.
                     if (source != Source.Trash) ToolsButton(
-                        onSort = { actions.sort(photos) }.takeIf { source != Source.FullResShared && photos.isNotEmpty() },
+                        onSort = { actions.sort(photos) }.takeIf { source != Source.FrontRow && photos.isNotEmpty() },
                         onSimilar = { vm.open(Screen.Similar) },
                         onCompare = {
                             picking = true
@@ -94,7 +94,7 @@ fun CollectionScreen(vm: GalleryViewModel, source: Source, actions: PhotoActions
         if (photos.isEmpty()) EmptyHint(
             stringResource(
                 when (source) {
-                    Source.FullResShared -> R.string.empty_shared
+                    Source.FrontRow -> R.string.empty_shared
                     Source.Favorites -> R.string.empty_favourites
                     Source.Trash -> R.string.empty_trash
                     else -> R.string.empty_photos
@@ -105,7 +105,7 @@ fun CollectionScreen(vm: GalleryViewModel, source: Source, actions: PhotoActions
         else PhotoGrid(
             photos = photos,
             // These two have their own order (newest marker / as trashed), so month headers would mislead.
-            sort = if (source == Source.FullResShared || source == Source.Trash) null else vm.store.photoSort,
+            sort = if (source == Source.FrontRow || source == Source.Trash) null else vm.store.photoSort,
             selection = selection,
             onSelectionChange = { selection = it },
             onOpen = { vm.open(Screen.Viewer(source, it.id)) },
@@ -113,7 +113,7 @@ fun CollectionScreen(vm: GalleryViewModel, source: Source, actions: PhotoActions
             onZoom = vm.store::zoomGrid,
             focusId = vm.focus,
             // On the Front Row and Favourites pages every photo would carry that page's badge, which says nothing.
-            frontRow = if (source == Source.FullResShared || source == Source.Trash) emptySet() else vm.store.marks.keys,
+            frontRow = if (source == Source.FrontRow || source == Source.Trash) emptySet() else vm.store.marks.keys,
             favorites = if (source == Source.Favorites || source == Source.Trash) emptySet() else vm.store.favorites,
             leaving = vm.leaving,
             showExpiry = source == Source.Trash,

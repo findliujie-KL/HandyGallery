@@ -51,7 +51,7 @@ import com.lmxyapp.handygallery.ui.BusyDialog
 import com.lmxyapp.handygallery.ui.CollectionScreen
 import com.lmxyapp.handygallery.ui.EditorHost
 import com.lmxyapp.handygallery.ui.FolderPickerSheet
-import com.lmxyapp.handygallery.ui.FrsTheme
+import com.lmxyapp.handygallery.ui.HgTheme
 import com.lmxyapp.handygallery.ui.HomeScreen
 import com.lmxyapp.handygallery.ui.Tips
 import com.lmxyapp.handygallery.ui.LocalTipsAllowed
@@ -117,7 +117,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     fun photosFor(source: Source): List<Photo> = when (source) {
         Source.All -> wall
         Source.Screenshots -> screenshots
-        Source.FullResShared -> shared
+        Source.FrontRow -> shared
         Source.Favorites -> favorites
         Source.Trash -> trashed
         is Source.Folder -> sorted.filter { it.bucketId == source.id }
@@ -233,7 +233,7 @@ class MainActivity : ComponentActivity() {
                 val style = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark }
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
             }
-            FrsTheme(vm.store.theme) { App(vm) }
+            HgTheme(vm.store.theme) { App(vm) }
         }
     }
 
@@ -251,7 +251,7 @@ class MainActivity : ComponentActivity() {
         if (link.scheme != "handygallery") return
         when (link.host) {
             "screenshots" -> vm.jumpTo(Source.Screenshots)
-            "frontrow" -> vm.jumpTo(Source.FullResShared)
+            "frontrow" -> vm.jumpTo(Source.FrontRow)
         }
     }
 

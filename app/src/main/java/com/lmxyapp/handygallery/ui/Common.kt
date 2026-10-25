@@ -80,7 +80,7 @@ private val DarkColors = darkColorScheme(
 )
 
 @Composable
-fun FrsTheme(mode: ThemeMode = ThemeMode.System, content: @Composable () -> Unit) {
+fun HgTheme(mode: ThemeMode = ThemeMode.System, content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = if (isDark(mode)) DarkColors else LightColors, content = content)
 }
 
@@ -158,7 +158,7 @@ fun FrontRowButton(alreadyThere: Boolean, onPrep: () -> Unit, onRemove: () -> Un
     Box {
         IconButton(onClick = { if (alreadyThere) open = true else onPrep() }) {
             Icon(
-                FrsIcons.Prep,
+                HgIcons.Prep,
                 contentDescription = stringResource(R.string.prep),
                 tint = if (alreadyThere) FrontRowTint else LocalContentColor.current,
             )

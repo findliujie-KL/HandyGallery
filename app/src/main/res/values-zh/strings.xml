@@ -6,7 +6,7 @@
     <string name="photos">照片</string>
     <string name="folders">文件夹</string>
     <string name="screenshots">截图</string>
-    <string name="fullresshared">已在分享区置顶</string>
+    <string name="front_row_album">已在分享区置顶</string>
     <string name="favourites">收藏</string>
     <string name="trash">回收站</string>
     <string name="settings">设置</string>

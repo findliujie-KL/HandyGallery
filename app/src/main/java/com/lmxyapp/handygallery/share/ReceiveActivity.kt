@@ -18,7 +18,7 @@ import com.lmxyapp.handygallery.R
 import com.lmxyapp.handygallery.Store
 import com.lmxyapp.handygallery.Trial
 import com.lmxyapp.handygallery.ui.BusyCard
-import com.lmxyapp.handygallery.ui.FrsTheme
+import com.lmxyapp.handygallery.ui.HgTheme
 import kotlinx.coroutines.launch
 
 /** Share target: takes images from any app and forwards them as a file (one image) or a zip (several). */
@@ -39,7 +39,7 @@ class ReceiveActivity : ComponentActivity() {
         }
         val theme = Store.get(this).theme
         setContent {
-            FrsTheme(theme) {
+            HgTheme(theme) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     BusyCard(if (uris.size == 1) getString(R.string.preparing_original) else getString(R.string.zipping, uris.size))
                 }
